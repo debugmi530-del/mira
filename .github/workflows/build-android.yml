@@ -1,0 +1,101 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: "4.3"
+  EXPORT_NAME: mira
+  ANDROID_BUILD_TOOLS: "34.0.0"
+
+jobs:
+  export-android:
+    name: Android Export
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Install Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build tools & NDK
+        run: |
+          sdkmanager "build-tools;34.0.0" "platform-tools" "platforms;android-34" "ndk;23.2.8568313" "cmake;3.22.1"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/23.2.8568313" >> $GITHUB_ENV
+
+      - name: Download Godot ${{ env.GODOT_VERSION }}
+        run: |
+          wget -q "https://github.com/godotengine/godot/releases/download/${{ env.GODOT_VERSION }}-stable/Godot_v${{ env.GODOT_VERSION }}-stable_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          sudo mv /tmp/godot/Godot_v${{ env.GODOT_VERSION }}-stable_linux.x86_64 /usr/local/bin/godot
+          sudo chmod +x /usr/local/bin/godot
+
+      - name: Download Godot Export Templates
+        run: |
+          mkdir -p ~/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable
+          wget -q "https://github.com/godotengine/godot/releases/download/${{ env.GODOT_VERSION }}-stable/Godot_v${{ env.GODOT_VERSION }}-stable_export_templates.tpz" -O /tmp/templates.tpz
+          unzip -q /tmp/templates.tpz -d /tmp/templates
+          mv /tmp/templates/templates/* ~/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable/
+
+      - name: Generate debug keystore
+        run: |
+          keytool -genkey -v \
+            -keystore android/debug.keystore \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Setup Godot Android build
+        run: |
+          mkdir -p android/build
+          godot --headless --quit || true
+          godot --headless --export-debug "Android" /dev/null || true
+
+      - name: Install Godot Android build template
+        run: |
+          godot --headless --install-android-build-template || true
+
+      - name: Build APK
+        run: |
+          mkdir -p build
+          godot --headless --verbose --export-debug "Android" build/${{ env.EXPORT_NAME }}.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.EXPORT_NAME }}-debug-apk
+          path: build/${{ env.EXPORT_NAME }}.apk
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "build-${{ github.run_number }}"
+          name: "Мира v${{ github.run_number }}"
+          body: |
+            Автосборка #${{ github.run_number }}
+            
+            Скачайте APK ниже и установите на Android устройство.
+            Перед установкой разрешите установку из неизвестных источников.
+          files: build/${{ env.EXPORT_NAME }}.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

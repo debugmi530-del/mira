@@ -1,0 +1,25 @@
+# Godot 4 specific ignores
+.godot/
+*.translation
+export_credentials.cfg
+
+# Android
+android/build/.gradle/
+android/build/build/
+android/build/.cxx/
+*.apk
+*.aab
+!build/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+*.suo
+*.user
+
+# Build artifacts kept in releases only
+build/*.apk
+build/*.aab

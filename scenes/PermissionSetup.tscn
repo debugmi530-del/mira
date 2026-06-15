@@ -1,0 +1,56 @@
+[gd_scene load_steps=2 format=3 uid="uid://perm001"]
+
+[ext_resource type="Script" path="res://scripts/PermissionSetup.gd" id="1"]
+
+[node name="PermissionSetup" type="Node"]
+script = ExtResource("1")
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
+
+[node name="UI" type="VBoxContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = 60.0
+offset_right = -24.0
+offset_bottom = -40.0
+
+[node name="StepIndicator" type="Label" parent="UI"]
+layout_mode = 2
+text = "1/11"
+horizontal_alignment = 2
+
+[node name="MiraFace" type="TextureRect" parent="UI"]
+layout_mode = 2
+custom_minimum_size = Vector2(120, 120)
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Title" type="Label" parent="UI"]
+layout_mode = 2
+text = "Привет!"
+theme_override_font_sizes/font_size = 28
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="Description" type="Label" parent="UI"]
+layout_mode = 2
+text = "Описание"
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="Spacer" type="Control" parent="UI"]
+layout_mode = 2
+size_flags_vertical = 3
+custom_minimum_size = Vector2(0, 32)
+
+[node name="AllowButton" type="Button" parent="UI"]
+layout_mode = 2
+text = "Разрешить"
+script_signal_connected = true
+
+[node name="SkipButton" type="Button" parent="UI"]
+layout_mode = 2
+text = "Пропустить"
+script_signal_connected = true

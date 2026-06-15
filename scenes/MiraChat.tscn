@@ -1,0 +1,68 @@
+[gd_scene load_steps=2 format=3 uid="uid://chat001"]
+
+[ext_resource type="Script" path="res://scripts/MiraChat.gd" id="1"]
+
+[node name="MiraChat" type="Node"]
+script = ExtResource("1")
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
+
+[node name="Background" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.047, 0.047, 0.055, 1)
+
+[node name="UI" type="VBoxContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="TopBar" type="HBoxContainer" parent="UI"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 64)
+
+[node name="MiraFace" type="TextureRect" parent="UI/TopBar"]
+layout_mode = 2
+custom_minimum_size = Vector2(48, 48)
+expand_mode = 1
+
+[node name="MiraName" type="Label" parent="UI/TopBar"]
+layout_mode = 2
+text = "Мира"
+vertical_alignment = 1
+theme_override_font_sizes/font_size = 20
+
+[node name="StatusDot" type="ColorRect" parent="UI/TopBar"]
+layout_mode = 2
+custom_minimum_size = Vector2(10, 10)
+color = Color(0.4, 0.9, 0.4, 1)
+
+[node name="ScrollContainer" type="ScrollContainer" parent="UI"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ChatContainer" type="VBoxContainer" parent="UI/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="TypingIndicator" type="Label" parent="UI"]
+layout_mode = 2
+text = "Мира печатает..."
+visible = false
+theme_override_font_sizes/font_size = 13
+theme_override_colors/font_color = Color(0.5, 0.5, 0.5, 1)
+
+[node name="InputRow" type="HBoxContainer" parent="UI"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 56)
+
+[node name="InputField" type="LineEdit" parent="UI/InputRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Напиши что-нибудь..."
+
+[node name="SendButton" type="Button" parent="UI/InputRow"]
+layout_mode = 2
+text = "→"
+custom_minimum_size = Vector2(56, 0)

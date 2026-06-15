@@ -1,0 +1,33 @@
+apply plugin: 'com.android.library'
+
+android {
+    compileSdkVersion 34
+    namespace 'com.mira.plugin'
+
+    defaultConfig {
+        minSdkVersion 24
+        targetSdkVersion 34
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+}
+
+repositories {
+    google()
+    mavenCentral()
+}
+
+dependencies {
+    compileOnly fileTree(include: ['godot-lib*.aar'], dir: 'libs')
+    implementation 'androidx.core:core:1.12.0'
+    implementation 'com.google.android.gms:play-services-location:21.0.1'
+}

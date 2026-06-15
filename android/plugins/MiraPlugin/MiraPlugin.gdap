@@ -1,0 +1,9 @@
+[config]
+name="MiraPlugin"
+binary_type="local"
+binary="MiraPlugin.aar"
+
+[dependencies]
+local=[]
+remote=[]
+custom_maven_repos=[]
