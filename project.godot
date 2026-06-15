@@ -19,8 +19,8 @@ config/icon="res://assets/icon.png"
 
 [autoload]
 
-GameState="*res://autoloads/GameState.gd"
 MemorySystem="*res://autoloads/MemorySystem.gd"
+GameState="*res://autoloads/GameState.gd"
 DeviceData="*res://autoloads/DeviceData.gd"
 FearProfile="*res://autoloads/FearProfile.gd"
 TextNormalizer="*res://autoloads/TextNormalizer.gd"

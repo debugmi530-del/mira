@@ -8,7 +8,7 @@ on:
 env:
   GODOT_VERSION: "4.3"
   EXPORT_NAME: mira
-  ANDROID_BUILD_TOOLS: "34.0.0"
+  PROJECT_DIR: mira-game
 
 jobs:
   export-android:
@@ -39,7 +39,7 @@ jobs:
         run: |
           wget -q "https://github.com/godotengine/godot/releases/download/${{ env.GODOT_VERSION }}-stable/Godot_v${{ env.GODOT_VERSION }}-stable_linux.x86_64.zip" -O /tmp/godot.zip
           unzip -q /tmp/godot.zip -d /tmp/godot
-          sudo mv /tmp/godot/Godot_v${{ env.GODOT_VERSION }}-stable_linux.x86_64 /usr/local/bin/godot
+          sudo mv "/tmp/godot/Godot_v${{ env.GODOT_VERSION }}-stable_linux.x86_64" /usr/local/bin/godot
           sudo chmod +x /usr/local/bin/godot
 
       - name: Download Godot Export Templates
@@ -52,7 +52,7 @@ jobs:
       - name: Generate debug keystore
         run: |
           keytool -genkey -v \
-            -keystore android/debug.keystore \
+            -keystore ${{ env.PROJECT_DIR }}/android/debug.keystore \
             -storepass android \
             -alias androiddebugkey \
             -keypass android \
@@ -61,30 +61,43 @@ jobs:
             -validity 10000 \
             -dname "CN=Android Debug,O=Android,C=US"
 
-      - name: Setup Godot Android build
+      - name: Install Android build template into project
         run: |
+          cd ${{ env.PROJECT_DIR }}
           mkdir -p android/build
-          godot --headless --quit || true
-          godot --headless --export-debug "Android" /dev/null || true
+          # Import project to generate .godot directory
+          godot --headless --path . --import --quit 2>/dev/null || true
+          # Extract android source template
+          if [ -f ~/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable/android_source.zip ]; then
+            unzip -q ~/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable/android_source.zip -d android/build/
+            echo "Android build template extracted"
+          else
+            echo "WARNING: android_source.zip not found, build may fail"
+          fi
 
-      - name: Install Godot Android build template
+      - name: Build plugin AAR
         run: |
-          godot --headless --install-android-build-template || true
+          cd ${{ env.PROJECT_DIR }}/android/plugins/MiraPlugin
+          chmod +x gradlew 2>/dev/null || true
+          gradle wrapper --gradle-version 8.0 2>/dev/null || true
+          gradle assembleDebug --no-daemon 2>/dev/null || \
+            echo "Plugin build skipped (no gradlew or build.gradle configured for standalone build)"
 
       - name: Build APK
         run: |
+          cd ${{ env.PROJECT_DIR }}
           mkdir -p build
-          godot --headless --verbose --export-debug "Android" build/${{ env.EXPORT_NAME }}.apk
+          godot --headless --path . --verbose --export-debug "Android" build/${{ env.EXPORT_NAME }}.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.EXPORT_NAME }}-debug-apk
-          path: build/${{ env.EXPORT_NAME }}.apk
+          path: ${{ env.PROJECT_DIR }}/build/${{ env.EXPORT_NAME }}.apk
           retention-days: 30
 
       - name: Create GitHub Release
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && hashFiles(format('{0}/build/{1}.apk', env.PROJECT_DIR, env.EXPORT_NAME)) != ''
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "build-${{ github.run_number }}"
@@ -94,7 +107,7 @@ jobs:
             
             Скачайте APK ниже и установите на Android устройство.
             Перед установкой разрешите установку из неизвестных источников.
-          files: build/${{ env.EXPORT_NAME }}.apk
+          files: ${{ env.PROJECT_DIR }}/build/${{ env.EXPORT_NAME }}.apk
           draft: false
           prerelease: false
         env:
