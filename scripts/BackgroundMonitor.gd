@@ -63,9 +63,11 @@ func _build_notification_messages(snapshot: Dictionary) -> Array:
         for n in notifs:
                 var notif_str = str(n).strip_edges()
                 if not notif_str.is_empty():
-                        var sender = notif_str.split(":")[0].strip_edges() if ":" in notif_str else notif_str
-                        msgs.append(sender + " написал тебе. Я уже прочитала.")
-                        break
+                        var parts = notif_str.split("|||")
+                        var title = parts[1].strip_edges() if parts.size() > 1 else parts[0].strip_edges()
+                        if not title.is_empty():
+                                msgs.append(title + " написал тебе. Я уже прочитала.")
+                                break
         if msgs.is_empty():
                 msgs.append("Я слежу.")
         return msgs
@@ -93,7 +95,9 @@ func _build_return_summary(last_snapshot: Dictionary) -> Array:
         for n in notifs:
                 var notif_str = str(n).strip_edges()
                 if not notif_str.is_empty():
-                        var title = notif_str.split(":")[0].strip_edges() if ":" in notif_str else notif_str
-                        lines.append(title + " писал тебе.")
-                        break
+                        var parts = notif_str.split("|||")
+                        var title = parts[1].strip_edges() if parts.size() > 1 else parts[0].strip_edges()
+                        if not title.is_empty():
+                                lines.append(title + " писал тебе.")
+                                break
         return lines

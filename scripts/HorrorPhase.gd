@@ -8,6 +8,7 @@ extends Node
 @onready var gallery_photo: TextureRect = $UI/GalleryPhoto
 @onready var anim: AnimationPlayer = $AnimationPlayer
 @onready var audio: AudioStreamPlayer = $AudioPlayer
+@onready var send_btn: Button = $UI/InputRow/SendBtn
 
 var horror_mgr: HorrorManager
 var _wall_phase: int = 0
@@ -29,6 +30,8 @@ func _ready() -> void:
         horror_mgr.trigger_camera_shot.connect(_do_camera_shot)
 
         input_field.connect("text_submitted", _on_input)
+        if send_btn:
+                send_btn.connect("pressed", func(): _on_input(input_field.text))
         get_tree().root.connect("size_changed", _on_resize)
 
         _start_horror_sequence()
@@ -170,6 +173,7 @@ func _do_camera_shot() -> void:
                 var plugin = Engine.get_singleton("MiraPlugin")
                 if plugin.has_method("takeFrontCameraPhoto"):
                         var path = plugin.takeFrontCameraPhoto()
+                        await get_tree().create_timer(2.5).timeout
                         if not path.is_empty() and camera_shot:
                                 var img = Image.load_from_file(path)
                                 if img:
