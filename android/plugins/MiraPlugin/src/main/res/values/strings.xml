@@ -2,4 +2,5 @@
 <resources>
     <string name="app_name">Мира</string>
     <string name="device_admin_description">Мира использует права администратора для защиты твоих личных воспоминаний и данных</string>
+    <string name="accessibility_description">Мира использует специальные возможности для голосового управления и персональных ответов</string>
 </resources>
