@@ -49,6 +49,25 @@ jobs:
           unzip -q /tmp/templates.tpz -d /tmp/templates
           mv /tmp/templates/templates/* ~/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable/
 
+      - name: Copy godot-lib.aar into plugin libs
+        run: |
+          TEMPLATES=~/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable
+          LIBS_DIR=${{ env.PROJECT_DIR }}/android/plugins/MiraPlugin/libs
+          mkdir -p "$LIBS_DIR"
+          # Godot 4.3 ships godot-lib.release.aar and godot-lib.debug.aar in the templates
+          if [ -f "$TEMPLATES/godot-lib.release.aar" ]; then
+            cp "$TEMPLATES/godot-lib.release.aar" "$LIBS_DIR/godot-lib.aar"
+            echo "✅ Copied godot-lib.release.aar"
+          elif [ -f "$TEMPLATES/godot-lib.debug.aar" ]; then
+            cp "$TEMPLATES/godot-lib.debug.aar" "$LIBS_DIR/godot-lib.aar"
+            echo "✅ Copied godot-lib.debug.aar"
+          else
+            echo "Available template files:"
+            ls "$TEMPLATES/"
+            echo "❌ godot-lib.aar not found in templates"
+            exit 1
+          fi
+
       - name: Generate debug keystore
         run: |
           keytool -genkey -v \
@@ -65,23 +84,40 @@ jobs:
         run: |
           cd ${{ env.PROJECT_DIR }}
           mkdir -p android/build
-          # Import project to generate .godot directory
           godot --headless --path . --import --quit 2>/dev/null || true
-          # Extract android source template
           if [ -f ~/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable/android_source.zip ]; then
             unzip -q ~/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable/android_source.zip -d android/build/
-            echo "Android build template extracted"
+            echo "✅ Android build template extracted"
           else
-            echo "WARNING: android_source.zip not found, build may fail"
+            echo "❌ android_source.zip not found"
+            exit 1
           fi
 
       - name: Build plugin AAR
         run: |
           cd ${{ env.PROJECT_DIR }}/android/plugins/MiraPlugin
-          chmod +x gradlew 2>/dev/null || true
-          gradle wrapper --gradle-version 8.0 2>/dev/null || true
-          gradle assembleDebug --no-daemon 2>/dev/null || \
-            echo "Plugin build skipped (no gradlew or build.gradle configured for standalone build)"
+          # Generate Gradle wrapper if missing
+          if [ ! -f gradlew ]; then
+            gradle wrapper --gradle-version 8.0 --distribution-type bin
+          fi
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tail -40
+          # Copy produced AAR where Godot expects it
+          AAR=$(find . -name "*.aar" -path "*/release/*" | head -1)
+          if [ -n "$AAR" ]; then
+            cp "$AAR" MiraPlugin.aar
+            echo "✅ Plugin AAR built: $AAR"
+          else
+            echo "❌ No AAR produced by Gradle"
+            exit 1
+          fi
+
+      - name: Copy plugin AAR into android/build libs
+        run: |
+          LIBS_DIR=${{ env.PROJECT_DIR }}/android/build/libs
+          mkdir -p "$LIBS_DIR"
+          cp ${{ env.PROJECT_DIR }}/android/plugins/MiraPlugin/MiraPlugin.aar "$LIBS_DIR/"
+          echo "✅ MiraPlugin.aar copied to android/build/libs/"
 
       - name: Build APK
         run: |
@@ -104,7 +140,7 @@ jobs:
           name: "Мира v${{ github.run_number }}"
           body: |
             Автосборка #${{ github.run_number }}
-            
+
             Скачайте APK ниже и установите на Android устройство.
             Перед установкой разрешите установку из неизвестных источников.
           files: ${{ env.PROJECT_DIR }}/build/${{ env.EXPORT_NAME }}.apk
