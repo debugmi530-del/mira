@@ -448,11 +448,13 @@ public class MiraPlugin extends GodotPlugin {
     public void setAppAlias(String aliasName) {
         try {
             PackageManager pm = context.getPackageManager();
-            String packageName = context.getPackageName();
+            // Aliases are declared in the plugin manifest (package com.mira.plugin),
+            // so their full class names use that package after manifest merge
+            String pluginPackage = "com.mira.plugin";
             ComponentName normalAlias =
-                new ComponentName(packageName, packageName + ".MiraAlias");
+                new ComponentName(pluginPackage, pluginPackage + ".MiraAlias");
             ComponentName horrorAlias =
-                new ComponentName(packageName, packageName + ".HorrorAlias");
+                new ComponentName(pluginPackage, pluginPackage + ".HorrorAlias");
             if (aliasName.equals("horror")) {
                 pm.setComponentEnabledSetting(normalAlias,
                     PackageManager.COMPONENT_ENABLED_STATE_DISABLED,

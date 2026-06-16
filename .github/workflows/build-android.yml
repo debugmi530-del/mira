@@ -54,24 +54,6 @@ jobs:
           unzip -q /tmp/templates.tpz -d /tmp/templates
           mv /tmp/templates/templates/* $HOME/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable/
 
-      - name: Copy godot-lib.aar into plugin libs
-        run: |
-          TEMPLATES=$HOME/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable
-          LIBS_DIR=${{ env.PROJECT_DIR }}/android/plugins/MiraPlugin/libs
-          mkdir -p "$LIBS_DIR"
-          if [ -f "$TEMPLATES/godot-lib.release.aar" ]; then
-            cp "$TEMPLATES/godot-lib.release.aar" "$LIBS_DIR/godot-lib.aar"
-            echo "✅ Copied godot-lib.release.aar"
-          elif [ -f "$TEMPLATES/godot-lib.debug.aar" ]; then
-            cp "$TEMPLATES/godot-lib.debug.aar" "$LIBS_DIR/godot-lib.aar"
-            echo "✅ Copied godot-lib.debug.aar"
-          else
-            echo "Available template files:"
-            ls "$TEMPLATES/"
-            echo "❌ godot-lib.aar not found in templates"
-            exit 1
-          fi
-
       - name: Generate debug keystore
         run: |
           mkdir -p ${{ env.PROJECT_DIR }}/android
@@ -94,8 +76,27 @@ jobs:
           if [ -f "$TEMPLATES/android_source.zip" ]; then
             unzip -q "$TEMPLATES/android_source.zip" -d android/build/
             echo "✅ Android build template extracted"
+            echo "Files in android/build (first 20):"
+            find android/build -maxdepth 3 | head -20
           else
-            echo "❌ android_source.zip not found"
+            echo "❌ android_source.zip not found in templates"
+            ls "$TEMPLATES/"
+            exit 1
+          fi
+
+      - name: Copy godot-lib.aar from build template into plugin libs
+        run: |
+          # godot-lib*.aar lives INSIDE android_source.zip → android/build/
+          LIBS_DIR=${{ env.PROJECT_DIR }}/android/plugins/MiraPlugin/libs
+          mkdir -p "$LIBS_DIR"
+          AAR=$(find ${{ env.PROJECT_DIR }}/android/build -name "godot-lib*.aar" | head -1)
+          if [ -n "$AAR" ]; then
+            cp "$AAR" "$LIBS_DIR/godot-lib.aar"
+            echo "✅ Copied $(basename $AAR) → plugin/libs/godot-lib.aar"
+          else
+            echo "Searching for any .aar in build template:"
+            find ${{ env.PROJECT_DIR }}/android/build -name "*.aar" || echo "none"
+            echo "❌ godot-lib.aar not found inside android_source.zip"
             exit 1
           fi
 
@@ -114,13 +115,6 @@ jobs:
             echo "❌ No AAR produced by Gradle"
             exit 1
           fi
-
-      - name: Copy plugin AAR into android/build libs
-        run: |
-          LIBS_DIR=${{ env.PROJECT_DIR }}/android/build/libs
-          mkdir -p "$LIBS_DIR"
-          cp ${{ env.PROJECT_DIR }}/android/plugins/MiraPlugin/MiraPlugin.aar "$LIBS_DIR/"
-          echo "✅ MiraPlugin.aar copied to android/build/libs/"
 
       - name: Build APK
         run: |
