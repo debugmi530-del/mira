@@ -101,14 +101,31 @@ jobs:
       - name: Build plugin AAR
         run: |
           PLUGIN_DIR="$GITHUB_WORKSPACE/android/plugins/MiraPlugin"
-          # setup-gradle@v4 runs from GITHUB_WORKSPACE regardless of cd
-          # so we must pass --project-dir explicitly
-          gradle --project-dir "$PLUGIN_DIR" assembleRelease --no-daemon --stacktrace \
-            > /tmp/gradle-build.log 2>&1
-          EXIT=$?
+          # setup-gradle wrapper script doesn't forward I/O redirects.
+          # Find the actual gradle binary installed by setup-gradle action.
+          GRADLE_BIN=$(find "${RUNNER_TEMP:-/home/runner/work/_temp}" \
+            -name "gradle" -executable -path "*/gradle-8.4/bin/gradle" 2>/dev/null | head -1)
+          if [ -z "$GRADLE_BIN" ]; then
+            GRADLE_BIN=$(find "$HOME" \
+              -name "gradle" -executable -path "*/gradle-8.4/bin/gradle" 2>/dev/null | head -1)
+          fi
+          if [ -z "$GRADLE_BIN" ]; then
+            echo "⚠️ Gradle binary not found via find, falling back to PATH"
+            GRADLE_BIN="gradle"
+          fi
+          echo "Using Gradle binary: $GRADLE_BIN"
+          "$GRADLE_BIN" --version
+          "$GRADLE_BIN" \
+            --project-dir "$PLUGIN_DIR" \
+            assembleRelease \
+            --no-daemon \
+            --stacktrace \
+            2>&1 | tee /tmp/gradle-build.log
+          EXIT=${PIPESTATUS[0]}
+          echo "Gradle exit code: $EXIT"
           if [ $EXIT -ne 0 ]; then
-            echo "=== GRADLE BUILD FAILED ==="
-            cat /tmp/gradle-build.log | tail -120
+            echo "=== BUILD FAILED — last 60 lines ==="
+            tail -60 /tmp/gradle-build.log
             exit $EXIT
           fi
           AAR=$(find "$PLUGIN_DIR" -name "*.aar" -path "*/release/*" | head -1)
