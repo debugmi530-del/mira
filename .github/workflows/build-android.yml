@@ -27,6 +27,11 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Setup Gradle 8.0
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: "8.0"
+
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
@@ -44,17 +49,16 @@ jobs:
 
       - name: Download Godot Export Templates
         run: |
-          mkdir -p ~/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable
+          mkdir -p $HOME/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable
           wget -q "https://github.com/godotengine/godot/releases/download/${{ env.GODOT_VERSION }}-stable/Godot_v${{ env.GODOT_VERSION }}-stable_export_templates.tpz" -O /tmp/templates.tpz
           unzip -q /tmp/templates.tpz -d /tmp/templates
-          mv /tmp/templates/templates/* ~/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable/
+          mv /tmp/templates/templates/* $HOME/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable/
 
       - name: Copy godot-lib.aar into plugin libs
         run: |
-          TEMPLATES=~/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable
+          TEMPLATES=$HOME/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable
           LIBS_DIR=${{ env.PROJECT_DIR }}/android/plugins/MiraPlugin/libs
           mkdir -p "$LIBS_DIR"
-          # Godot 4.3 ships godot-lib.release.aar and godot-lib.debug.aar in the templates
           if [ -f "$TEMPLATES/godot-lib.release.aar" ]; then
             cp "$TEMPLATES/godot-lib.release.aar" "$LIBS_DIR/godot-lib.aar"
             echo "✅ Copied godot-lib.release.aar"
@@ -86,8 +90,9 @@ jobs:
           cd ${{ env.PROJECT_DIR }}
           mkdir -p android/build
           godot --headless --path . --import --quit 2>/dev/null || true
-          if [ -f ~/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable/android_source.zip ]; then
-            unzip -q ~/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable/android_source.zip -d android/build/
+          TEMPLATES=$HOME/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable
+          if [ -f "$TEMPLATES/android_source.zip" ]; then
+            unzip -q "$TEMPLATES/android_source.zip" -d android/build/
             echo "✅ Android build template extracted"
           else
             echo "❌ android_source.zip not found"
@@ -96,14 +101,11 @@ jobs:
 
       - name: Build plugin AAR
         run: |
+          set -o pipefail
           cd ${{ env.PROJECT_DIR }}/android/plugins/MiraPlugin
-          # Generate Gradle wrapper if missing
-          if [ ! -f gradlew ]; then
-            gradle wrapper --gradle-version 8.0 --distribution-type bin
-          fi
+          gradle wrapper --gradle-version 8.0 --distribution-type bin
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tail -40
-          # Copy produced AAR where Godot expects it
+          ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tail -60
           AAR=$(find . -name "*.aar" -path "*/release/*" | head -1)
           if [ -n "$AAR" ]; then
             cp "$AAR" MiraPlugin.aar

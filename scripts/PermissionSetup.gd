@@ -111,7 +111,6 @@ func _on_allow_pressed() -> void:
         current_step += 1
         if current_step >= PERMISSION_STEPS.size():
                 MemorySystem.set_value("permissions_granted", true)
-                MemorySystem.set_value("first_launch", Time.get_unix_time_from_system())
                 get_tree().change_scene_to_file("res://scenes/MiraChat.tscn")
         else:
                 _show_step(current_step)
