@@ -72,7 +72,7 @@
         <activity-alias
             android:name=".HorrorAlias"
             android:targetActivity="com.godot.game.GodotApp"
-            android:label="???"
+            android:label="@string/horror_label"
             android:icon="@mipmap/ic_launcher_horror"
             android:enabled="false"
             android:exported="true">
