@@ -100,9 +100,16 @@ jobs:
 
       - name: Build plugin AAR
         run: |
-          set -o pipefail
           cd android/plugins/MiraPlugin
-          gradle assembleRelease --no-daemon --stacktrace 2>&1 | tail -80
+          gradle assembleRelease --no-daemon --info > /tmp/gradle-build.log 2>&1
+          EXIT=$?
+          if [ $EXIT -ne 0 ]; then
+            echo "=== GRADLE BUILD FAILED — full log ==="
+            grep -E "error:|Error|FAILED|> Task|Caused by|Exception" /tmp/gradle-build.log | head -80
+            echo "=== LAST 40 LINES ==="
+            tail -40 /tmp/gradle-build.log
+            exit $EXIT
+          fi
           AAR=$(find . -name "*.aar" -path "*/release/*" | head -1)
           if [ -n "$AAR" ]; then
             cp "$AAR" MiraPlugin.aar
