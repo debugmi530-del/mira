@@ -8,7 +8,7 @@ on:
 env:
   GODOT_VERSION: "4.3"
   EXPORT_NAME: mira
-  PROJECT_DIR: mira-game
+  PROJECT_DIR: "."
 
 jobs:
   export-android:
@@ -28,7 +28,7 @@ jobs:
           java-version: "17"
 
       - name: Setup Gradle 8.0
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.0"
 
@@ -56,9 +56,9 @@ jobs:
 
       - name: Generate debug keystore
         run: |
-          mkdir -p ${{ env.PROJECT_DIR }}/android
+          mkdir -p android
           keytool -genkey -v \
-            -keystore ${{ env.PROJECT_DIR }}/android/debug.keystore \
+            -keystore android/debug.keystore \
             -storepass android \
             -alias androiddebugkey \
             -keypass android \
@@ -69,15 +69,12 @@ jobs:
 
       - name: Install Android build template into project
         run: |
-          cd ${{ env.PROJECT_DIR }}
           mkdir -p android/build
           godot --headless --path . --import --quit 2>/dev/null || true
           TEMPLATES=$HOME/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable
           if [ -f "$TEMPLATES/android_source.zip" ]; then
             unzip -q "$TEMPLATES/android_source.zip" -d android/build/
             echo "✅ Android build template extracted"
-            echo "Files in android/build (first 20):"
-            find android/build -maxdepth 3 | head -20
           else
             echo "❌ android_source.zip not found in templates"
             ls "$TEMPLATES/"
@@ -86,16 +83,15 @@ jobs:
 
       - name: Copy godot-lib.aar from build template into plugin libs
         run: |
-          # godot-lib*.aar lives INSIDE android_source.zip → android/build/
-          LIBS_DIR=${{ env.PROJECT_DIR }}/android/plugins/MiraPlugin/libs
+          LIBS_DIR=android/plugins/MiraPlugin/libs
           mkdir -p "$LIBS_DIR"
-          AAR=$(find ${{ env.PROJECT_DIR }}/android/build -name "godot-lib*.aar" | head -1)
+          AAR=$(find android/build -name "godot-lib*.aar" | head -1)
           if [ -n "$AAR" ]; then
             cp "$AAR" "$LIBS_DIR/godot-lib.aar"
-            echo "✅ Copied $(basename $AAR) → plugin/libs/godot-lib.aar"
+            echo "✅ Copied $(basename $AAR) → $LIBS_DIR/godot-lib.aar"
           else
             echo "Searching for any .aar in build template:"
-            find ${{ env.PROJECT_DIR }}/android/build -name "*.aar" || echo "none"
+            find android/build -name "*.aar" || echo "none"
             echo "❌ godot-lib.aar not found inside android_source.zip"
             exit 1
           fi
@@ -103,7 +99,7 @@ jobs:
       - name: Build plugin AAR
         run: |
           set -o pipefail
-          cd ${{ env.PROJECT_DIR }}/android/plugins/MiraPlugin
+          cd android/plugins/MiraPlugin
           gradle assembleRelease --no-daemon --stacktrace 2>&1 | tail -80
           AAR=$(find . -name "*.aar" -path "*/release/*" | head -1)
           if [ -n "$AAR" ]; then
@@ -116,7 +112,6 @@ jobs:
 
       - name: Build APK
         run: |
-          cd ${{ env.PROJECT_DIR }}
           mkdir -p build
           godot --headless --path . --verbose --export-debug "Android" build/${{ env.EXPORT_NAME }}.apk
 
@@ -124,11 +119,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.EXPORT_NAME }}-debug-apk
-          path: ${{ env.PROJECT_DIR }}/build/${{ env.EXPORT_NAME }}.apk
+          path: build/${{ env.EXPORT_NAME }}.apk
           retention-days: 30
 
       - name: Create GitHub Release
-        if: github.ref == 'refs/heads/main' && hashFiles(format('{0}/build/{1}.apk', env.PROJECT_DIR, env.EXPORT_NAME)) != ''
+        if: github.ref == 'refs/heads/main' && hashFiles(format('build/{0}.apk', env.EXPORT_NAME)) != ''
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "build-${{ github.run_number }}"
@@ -138,7 +133,7 @@ jobs:
 
             Скачайте APK ниже и установите на Android устройство.
             Перед установкой разрешите установку из неизвестных источников.
-          files: ${{ env.PROJECT_DIR }}/build/${{ env.EXPORT_NAME }}.apk
+          files: build/${{ env.EXPORT_NAME }}.apk
           draft: false
           prerelease: false
         env:
