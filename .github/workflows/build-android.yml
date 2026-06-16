@@ -100,19 +100,20 @@ jobs:
 
       - name: Build plugin AAR
         run: |
-          cd android/plugins/MiraPlugin
-          gradle assembleRelease --no-daemon --info > /tmp/gradle-build.log 2>&1
+          PLUGIN_DIR="$GITHUB_WORKSPACE/android/plugins/MiraPlugin"
+          # setup-gradle@v4 runs from GITHUB_WORKSPACE regardless of cd
+          # so we must pass --project-dir explicitly
+          gradle --project-dir "$PLUGIN_DIR" assembleRelease --no-daemon --stacktrace \
+            > /tmp/gradle-build.log 2>&1
           EXIT=$?
           if [ $EXIT -ne 0 ]; then
-            echo "=== GRADLE BUILD FAILED — full log ==="
-            grep -E "error:|Error|FAILED|> Task|Caused by|Exception" /tmp/gradle-build.log | head -80
-            echo "=== LAST 40 LINES ==="
-            tail -40 /tmp/gradle-build.log
+            echo "=== GRADLE BUILD FAILED ==="
+            cat /tmp/gradle-build.log | tail -120
             exit $EXIT
           fi
-          AAR=$(find . -name "*.aar" -path "*/release/*" | head -1)
+          AAR=$(find "$PLUGIN_DIR" -name "*.aar" -path "*/release/*" | head -1)
           if [ -n "$AAR" ]; then
-            cp "$AAR" MiraPlugin.aar
+            cp "$AAR" "$PLUGIN_DIR/MiraPlugin.aar"
             echo "✅ Plugin AAR built: $AAR"
           else
             echo "❌ No AAR produced by Gradle"
