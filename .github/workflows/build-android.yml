@@ -70,6 +70,7 @@ jobs:
 
       - name: Generate debug keystore
         run: |
+          mkdir -p ${{ env.PROJECT_DIR }}/android
           keytool -genkey -v \
             -keystore ${{ env.PROJECT_DIR }}/android/debug.keystore \
             -storepass android \
