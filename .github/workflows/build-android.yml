@@ -71,6 +71,8 @@ jobs:
         run: |
           mkdir -p android/build
           godot --headless --path . --import --quit 2>/dev/null || true
+          # Remove Godot .import files from Android resource dirs — aapt rejects non-png/xml files
+          find android -name "*.import" -delete 2>/dev/null || true
           TEMPLATES=$HOME/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable
           if [ -f "$TEMPLATES/android_source.zip" ]; then
             unzip -q "$TEMPLATES/android_source.zip" -d android/build/
