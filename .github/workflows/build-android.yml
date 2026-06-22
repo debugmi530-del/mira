@@ -39,67 +39,6 @@ jobs:
           sdkmanager "build-tools;34.0.0" "platform-tools" "platforms;android-34" "ndk;23.2.8568313" "cmake;3.22.1"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/23.2.8568313" >> $GITHUB_ENV
 
-      - name: Diagnose Android SDK structure
-        run: |
-          echo "=== ANDROID_HOME=$ANDROID_HOME ==="
-          ls -la "$ANDROID_HOME/" 2>/dev/null || echo "SDK root missing"
-          echo "=== cmdline-tools ==="
-          ls -la "$ANDROID_HOME/cmdline-tools/" 2>/dev/null || echo "no cmdline-tools dir"
-          echo "=== build-tools ==="
-          ls -la "$ANDROID_HOME/build-tools/" 2>/dev/null || echo "no build-tools dir"
-          echo "=== platforms ==="
-          ls "$ANDROID_HOME/platforms/" 2>/dev/null || echo "no platforms dir"
-          echo "=== JAVA_HOME=$JAVA_HOME ==="
-          ls "$JAVA_HOME/bin/java" 2>/dev/null && echo "java OK" || echo "java MISSING"
-          ls "$JAVA_HOME/bin/keytool" 2>/dev/null && echo "keytool OK" || echo "keytool MISSING"
-
-          # Godot 4.3 looks for cmdline-tools/latest — create symlink if missing
-          if [ ! -d "$ANDROID_HOME/cmdline-tools/latest" ]; then
-            FIRST_VER=$(ls "$ANDROID_HOME/cmdline-tools/" 2>/dev/null | grep -v "^$\|latest" | sort -V | tail -1)
-            if [ -n "$FIRST_VER" ]; then
-              ln -sfn "$ANDROID_HOME/cmdline-tools/$FIRST_VER" "$ANDROID_HOME/cmdline-tools/latest"
-              echo "✅ Created cmdline-tools/latest -> $FIRST_VER"
-            else
-              echo "⚠️ No cmdline-tools version found"
-            fi
-          else
-            echo "✅ cmdline-tools/latest already exists"
-          fi
-          echo "=== cmdline-tools/latest ==="
-          ls "$ANDROID_HOME/cmdline-tools/latest/bin/" 2>/dev/null || echo "(none)"
-
-      - name: Download Godot ${{ env.GODOT_VERSION }}
-        run: |
-          wget -q "https://github.com/godotengine/godot/releases/download/${{ env.GODOT_VERSION }}-stable/Godot_v${{ env.GODOT_VERSION }}-stable_linux.x86_64.zip" -O /tmp/godot.zip
-          unzip -q /tmp/godot.zip -d /tmp/godot
-          sudo mv "/tmp/godot/Godot_v${{ env.GODOT_VERSION }}-stable_linux.x86_64" /usr/local/bin/godot
-          sudo chmod +x /usr/local/bin/godot
-          echo "Godot version: $(godot --headless --version 2>&1 | head -1)"
-
-      - name: Download Godot Export Templates
-        run: |
-          mkdir -p $HOME/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable
-          wget -q "https://github.com/godotengine/godot/releases/download/${{ env.GODOT_VERSION }}-stable/Godot_v${{ env.GODOT_VERSION }}-stable_export_templates.tpz" -O /tmp/templates.tpz
-          unzip -q /tmp/templates.tpz -d /tmp/templates
-          mv /tmp/templates/templates/* $HOME/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable/
-          echo "Templates: $(ls $HOME/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable/ | head -5)"
-
-      - name: Configure Godot Android SDK paths
-        run: |
-          mkdir -p ~/.config/godot
-          {
-            echo '[gd_resource type="EditorSettings" format=3]'
-            echo ''
-            echo '[resource]'
-            echo "export/android/java_sdk_path = \"$JAVA_HOME\""
-            echo "export/android/android_sdk_path = \"$ANDROID_HOME\""
-            echo "export/android/debug_keystore = \"$GITHUB_WORKSPACE/android/debug.keystore\""
-            echo 'export/android/debug_keystore_user = "androiddebugkey"'
-            echo 'export/android/debug_keystore_pass = "android"'
-          } > ~/.config/godot/editor_settings-4.tres
-          echo "=== EditorSettings ==="
-          cat ~/.config/godot/editor_settings-4.tres
-
       - name: Generate debug keystore
         run: |
           mkdir -p android
@@ -112,27 +51,28 @@ jobs:
             -keysize 2048 \
             -validity 10000 \
             -dname "CN=Android Debug,O=Android,C=US"
-          echo "✅ Keystore: $(ls -la android/debug.keystore)"
+          echo "✅ Keystore generated"
 
       - name: Install Android build template into project
         run: |
+          # firebelley/godot-export does NOT install the gradle build template
+          # for use_gradle_build=true projects — we must do it here first.
+          mkdir -p $HOME/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable
+          wget -q "https://github.com/godotengine/godot/releases/download/${{ env.GODOT_VERSION }}-stable/Godot_v${{ env.GODOT_VERSION }}-stable_export_templates.tpz" -O /tmp/templates.tpz
+          unzip -q /tmp/templates.tpz -d /tmp/templates
+          cp /tmp/templates/templates/* $HOME/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable/
+
           mkdir -p android/build
           TEMPLATES=$HOME/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable
-          if [ -f "$TEMPLATES/android_source.zip" ]; then
-            unzip -q "$TEMPLATES/android_source.zip" -d android/build/
-            echo "✅ Template extracted"
-          else
-            echo "❌ android_source.zip not found — available files:"
-            ls "$TEMPLATES/"
-            exit 1
-          fi
+          unzip -q "$TEMPLATES/android_source.zip" -d android/build/
+          echo "✅ Gradle build template extracted"
 
-          # Write .build_version — Godot editor normally does this on template install.
-          # android_source.zip does NOT contain it, so we create it manually.
-          # Must match VERSION_FULL_CONFIG = "major.minor.status.build" (no hash).
-          GODOT_VER=$(godot --headless --version 2>&1 | grep -oP 'v\K[0-9]+\.[0-9]+\.[a-z]+\.[a-z]+' | head -1)
-          [ -z "$GODOT_VER" ] && GODOT_VER="4.3.stable.official"
-          printf '%s' "$GODOT_VER" > android/build/.build_version
+          # .build_version must match VERSION_FULL_CONFIG inside Godot binary.
+          # Use the full version string (with hash) to ensure exact match.
+          # We'll patch it after running Godot once to get the exact string.
+          # For now write the known value; firebelley action will overwrite
+          # EditorSettings but not .build_version — so we must set it correctly.
+          echo -n "4.3.stable.official" > android/build/.build_version
           echo "✅ .build_version = $(cat android/build/.build_version)"
 
       - name: Copy godot-lib.aar from build template into plugin libs
@@ -142,9 +82,9 @@ jobs:
           AAR=$(find android/build -name "godot-lib*.aar" | head -1)
           if [ -n "$AAR" ]; then
             cp "$AAR" "$LIBS_DIR/godot-lib.aar"
-            echo "✅ Copied $(basename $AAR)"
+            echo "✅ godot-lib.aar copied"
           else
-            find android/build -name "*.aar" | head -10 || echo "no .aar found"
+            find android/build -name "*.aar" | head -5 || echo "no aar"
             echo "❌ godot-lib.aar not found"
             exit 1
           fi
@@ -155,7 +95,6 @@ jobs:
           GRADLE_BIN=$(find "${RUNNER_TEMP:-/home/runner/work/_temp}" "$HOME" \
             -name "gradle" -executable -path "*/gradle-8.4/bin/gradle" 2>/dev/null | head -1)
           GRADLE_BIN="${GRADLE_BIN:-gradle}"
-          echo "Gradle: $GRADLE_BIN"
 
           "$GRADLE_BIN" --project-dir "$PLUGIN_DIR" assembleRelease --no-daemon 2>&1 | tee /tmp/plugin-build.log
           EXIT=${PIPESTATUS[0]}
@@ -165,32 +104,34 @@ jobs:
           [ -z "$AAR" ] && AAR=$(find "$PLUGIN_DIR" -name "*.aar" ! -path "*/libs/*" 2>/dev/null | head -1)
           [ -z "$AAR" ] && { echo "❌ No AAR found"; exit 1; }
           cp "$AAR" "$PLUGIN_DIR/MiraPlugin.aar"
-          echo "✅ Plugin AAR → MiraPlugin.aar"
+          echo "✅ Plugin AAR: MiraPlugin.aar"
 
-          # Ignore PLUGIN build output only — android/build/ must remain visible to Godot
+          # Ignore PLUGIN build output only — android/build/ must stay visible
           touch "$PLUGIN_DIR/build/.gdignore"
 
-      - name: Build APK
+      - name: Export Android APK
+        id: export
+        uses: firebelley/godot-export@v6
+        with:
+          godot_executable_download_url: "https://github.com/godotengine/godot/releases/download/${{ env.GODOT_VERSION }}-stable/Godot_v${{ env.GODOT_VERSION }}-stable_linux.x86_64.zip"
+          godot_export_templates_download_url: "https://github.com/godotengine/godot/releases/download/${{ env.GODOT_VERSION }}-stable/Godot_v${{ env.GODOT_VERSION }}-stable_export_templates.tpz"
+          relative_export_path: "./build"
+          relative_project_path: "."
+          export_debug: true
+          cache: false
+        env:
+          JAVA_HOME: ${{ env.JAVA_HOME }}
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
+
+      - name: Check APK produced
         run: |
-          mkdir -p build
-          echo "=== Pre-export checks ==="
-          echo "Keystore : $(ls android/debug.keystore 2>/dev/null && echo OK || echo MISSING)"
-          echo "build_ver: $(cat android/build/.build_version 2>/dev/null || echo MISSING)"
-          echo "Plugin   : $(ls android/plugins/MiraPlugin/MiraPlugin.aar 2>/dev/null && echo OK || echo MISSING)"
-          echo "SDK      : $ANDROID_HOME"
-          echo "JAVA     : $JAVA_HOME"
-          echo ""
-          echo "=== Godot export (full, unfiltered) ==="
-          godot --headless --path . --verbose --export-debug "Android" build/${{ env.EXPORT_NAME }}.apk 2>&1 | tee /tmp/godot-export.log
-          EXIT=${PIPESTATUS[0]}
-          echo ""
-          echo "=== Godot exit code: $EXIT ==="
-          if [ -f "build/${{ env.EXPORT_NAME }}.apk" ]; then
-            echo "✅ APK: $(du -sh build/${{ env.EXPORT_NAME }}.apk)"
+          APK=$(find build -name "*.apk" | head -1)
+          if [ -n "$APK" ]; then
+            echo "✅ APK: $(du -sh $APK)"
           else
-            echo "❌ APK not produced"
-            echo "=== Errors only ==="
-            grep -i "error\|fail\|invalid\|missing\|cannot\|required\|mismatch" /tmp/godot-export.log | head -40
+            echo "❌ No APK found in build/"
+            ls -la build/ || echo "(empty)"
             exit 1
           fi
 
@@ -199,10 +140,11 @@ jobs:
         with:
           name: ${{ env.EXPORT_NAME }}-debug-apk
           path: build/${{ env.EXPORT_NAME }}.apk
+          if-no-files-found: error
           retention-days: 30
 
       - name: Create GitHub Release
-        if: github.ref == 'refs/heads/main' && hashFiles(format('build/{0}.apk', env.EXPORT_NAME)) != ''
+        if: github.ref == 'refs/heads/main' && hashFiles('build/*.apk') != ''
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "build-${{ github.run_number }}"
@@ -212,7 +154,7 @@ jobs:
 
             Скачайте APK и установите на Android.
             Разрешите установку из неизвестных источников.
-          files: build/${{ env.EXPORT_NAME }}.apk
+          files: build/*.apk
           draft: false
           prerelease: false
         env:
