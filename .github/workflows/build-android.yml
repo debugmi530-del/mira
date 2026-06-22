@@ -71,7 +71,6 @@ jobs:
         run: |
           mkdir -p android/build
           godot --headless --path . --import --quit 2>/dev/null || true
-          # Remove Godot .import files from Android resource dirs — aapt rejects non-png/xml files
           find android -name "*.import" -delete 2>/dev/null || true
           TEMPLATES=$HOME/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable
           if [ -f "$TEMPLATES/android_source.zip" ]; then
@@ -101,8 +100,7 @@ jobs:
       - name: Build plugin AAR
         run: |
           PLUGIN_DIR="$GITHUB_WORKSPACE/android/plugins/MiraPlugin"
-          # setup-gradle wrapper script doesn't forward I/O redirects.
-          # Find the actual gradle binary installed by setup-gradle action.
+
           GRADLE_BIN=$(find "${RUNNER_TEMP:-/home/runner/work/_temp}" \
             -name "gradle" -executable -path "*/gradle-8.4/bin/gradle" 2>/dev/null | head -1)
           if [ -z "$GRADLE_BIN" ]; then
@@ -115,6 +113,7 @@ jobs:
           fi
           echo "Using Gradle binary: $GRADLE_BIN"
           "$GRADLE_BIN" --version
+
           "$GRADLE_BIN" \
             --project-dir "$PLUGIN_DIR" \
             assembleRelease \
@@ -128,12 +127,28 @@ jobs:
             tail -60 /tmp/gradle-build.log
             exit $EXIT
           fi
-          AAR=$(find "$PLUGIN_DIR" -name "*.aar" -path "*/release/*" | head -1)
+
+          # FIX: AGP 8.x outputs AAR as build/outputs/aar/<name>-release.aar
+          # The old pattern "*/release/*" looked for "release" as a DIRECTORY,
+          # but AGP 8.x uses it only as a filename suffix → zero matches.
+          echo "=== Searching for built AAR ==="
+          find "$PLUGIN_DIR/build" -name "*.aar" 2>/dev/null || echo "(none in build/)"
+
+          AAR=$(find "$PLUGIN_DIR/build/outputs/aar" -name "*.aar" 2>/dev/null | head -1)
+          if [ -z "$AAR" ]; then
+            # Fallback: search entire plugin dir, skip the libs/ input AAR
+            AAR=$(find "$PLUGIN_DIR" -name "*.aar" ! -path "*/libs/*" 2>/dev/null | head -1)
+          fi
+
           if [ -n "$AAR" ]; then
+            # Copy to plugin root so Godot finds MiraPlugin.aar (name from .gdap)
             cp "$AAR" "$PLUGIN_DIR/MiraPlugin.aar"
-            echo "✅ Plugin AAR built: $AAR"
+            echo "✅ Plugin AAR built and staged: $AAR"
+            echo "✅ Copied to: $PLUGIN_DIR/MiraPlugin.aar"
           else
             echo "❌ No AAR produced by Gradle"
+            echo "=== Full build/outputs tree ==="
+            find "$PLUGIN_DIR/build/outputs" 2>/dev/null || echo "(build/outputs not found)"
             exit 1
           fi
 
