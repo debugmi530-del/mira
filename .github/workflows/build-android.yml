@@ -66,7 +66,6 @@ jobs:
             echo 'export/android/debug_keystore_user = "androiddebugkey"'
             echo 'export/android/debug_keystore_pass = "android"'
           } > ~/.config/godot/editor_settings-4.tres
-          echo "=== editor_settings-4.tres ==="
           cat ~/.config/godot/editor_settings-4.tres
 
       - name: Generate debug keystore
@@ -81,7 +80,6 @@ jobs:
             -keysize 2048 \
             -validity 10000 \
             -dname "CN=Android Debug,O=Android,C=US"
-          echo "✅ Keystore: $(ls -la android/debug.keystore)"
 
       - name: Install Android build template into project
         run: |
@@ -92,15 +90,25 @@ jobs:
           if [ -f "$TEMPLATES/android_source.zip" ]; then
             unzip -q "$TEMPLATES/android_source.zip" -d android/build/
             echo "✅ Template extracted"
-            echo "=== .build_version ==="
-            cat android/build/.build_version 2>/dev/null || echo "(not found)"
-            echo "=== android/build/ top level ==="
-            ls android/build/ | head -15
           else
             echo "❌ android_source.zip not found"
             ls "$TEMPLATES/"
             exit 1
           fi
+
+          # FIX: android_source.zip does NOT include .build_version —
+          # Godot editor writes it when installing. Without it, Godot
+          # reports "configuration errors" and refuses to export.
+          # We create it manually from the running Godot binary version.
+          GODOT_VER=$(godot --headless --version 2>&1 | grep -oP 'v\K[0-9]+\.[0-9]+\.[a-z]+\.[a-z]+' | head -1)
+          if [ -z "$GODOT_VER" ]; then
+            GODOT_VER="4.3.stable.official"
+          fi
+          echo "$GODOT_VER" > android/build/.build_version
+          echo "✅ .build_version = $(cat android/build/.build_version)"
+
+          echo "=== android/build/ ==="
+          ls android/build/ | head -15
 
       - name: Copy godot-lib.aar from build template into plugin libs
         run: |
@@ -111,7 +119,7 @@ jobs:
             cp "$AAR" "$LIBS_DIR/godot-lib.aar"
             echo "✅ Copied $(basename $AAR)"
           else
-            find android/build -name "*.aar" || echo "no aar found"
+            find android/build -name "*.aar" || echo "none"
             echo "❌ godot-lib.aar not found"
             exit 1
           fi
@@ -122,7 +130,6 @@ jobs:
           GRADLE_BIN=$(find "${RUNNER_TEMP:-/home/runner/work/_temp}" "$HOME" \
             -name "gradle" -executable -path "*/gradle-8.4/bin/gradle" 2>/dev/null | head -1)
           GRADLE_BIN="${GRADLE_BIN:-gradle}"
-          echo "Using: $GRADLE_BIN"
 
           "$GRADLE_BIN" --project-dir "$PLUGIN_DIR" assembleRelease --no-daemon 2>&1 | tee /tmp/plugin-build.log
           EXIT=${PIPESTATUS[0]}
@@ -140,25 +147,26 @@ jobs:
             echo "❌ No AAR found"
             exit 1
           fi
+
+          # Only ignore PLUGIN build output — android/build/ must stay visible!
           touch "$PLUGIN_DIR/build/.gdignore"
-          echo "✅ .gdignore → plugin build output only (android/build/ stays visible)"
+          echo "✅ .gdignore → plugin build only"
 
       - name: Build APK
         run: |
           mkdir -p build
           echo "=== Pre-export checks ==="
-          echo "Keystore exists: $(ls android/debug.keystore 2>/dev/null && echo YES || echo NO)"
-          cat android/build/.build_version 2>/dev/null && echo "" || echo "(no .build_version)"
-          echo "Plugin AAR: $(ls android/plugins/MiraPlugin/MiraPlugin.aar 2>/dev/null && echo YES || echo NO)"
-          echo "=== Starting Godot export ==="
+          echo "Keystore: $(ls android/debug.keystore 2>/dev/null && echo OK || echo MISSING)"
+          echo ".build_version: $(cat android/build/.build_version 2>/dev/null || echo MISSING)"
+          echo "Plugin AAR: $(ls android/plugins/MiraPlugin/MiraPlugin.aar 2>/dev/null && echo OK || echo MISSING)"
+          echo "=== Godot export ==="
           godot --headless --path . --verbose --export-debug "Android" build/${{ env.EXPORT_NAME }}.apk 2>&1 \
-            | grep -v "reimport\|import took\|^EditorFileSystem: Importing\|step [0-9]" \
+            | grep -v "EditorFileSystem: Importing\|import took\|step [0-9][0-9]*:" \
             | tee /tmp/godot-export.log
           if [ -f "build/${{ env.EXPORT_NAME }}.apk" ]; then
             echo "✅ APK: $(du -sh build/${{ env.EXPORT_NAME }}.apk)"
           else
             echo "❌ APK not produced"
-            echo "=== Errors from export log ==="
             grep -i "error\|fail\|invalid\|missing\|cannot" /tmp/godot-export.log | head -30
             exit 1
           fi
@@ -179,8 +187,8 @@ jobs:
           body: |
             Автосборка #${{ github.run_number }}
 
-            Скачайте APK ниже и установите на Android устройство.
-            Перед установкой разрешите установку из неизвестных источников.
+            Скачайте APK и установите на Android.
+            Разрешите установку из неизвестных источников.
           files: build/${{ env.EXPORT_NAME }}.apk
           draft: false
           prerelease: false
