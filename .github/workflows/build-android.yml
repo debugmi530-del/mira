@@ -8,7 +8,6 @@ on:
 env:
   GODOT_VERSION: "4.3"
   EXPORT_NAME: mira
-  PROJECT_DIR: "."
 
 jobs:
   export-android:
@@ -56,28 +55,19 @@ jobs:
 
       - name: Configure Godot Android SDK paths
         run: |
-          # Godot headless ignores env vars — SDK paths must be in EditorSettings
           mkdir -p ~/.config/godot
-          python3 - << 'PYEOF'
-          import os, pathlib
-          settings = pathlib.Path(os.path.expanduser("~/.config/godot/editor_settings-4.tres"))
-          java_home = os.environ.get("JAVA_HOME", "")
-          android_home = os.environ.get("ANDROID_HOME", "/usr/local/lib/android/sdk")
-          workspace = os.environ.get("GITHUB_WORKSPACE", os.getcwd())
-          keystore = f"{workspace}/android/debug.keystore"
-          content = f'''[gd_resource type="EditorSettings" format=3]
-
-[resource]
-export/android/java_sdk_path = "{java_home}"
-export/android/android_sdk_path = "{android_home}"
-export/android/debug_keystore = "{keystore}"
-export/android/debug_keystore_user = "androiddebugkey"
-export/android/debug_keystore_pass = "android"
-'''
-          settings.write_text(content)
-          print("✅ Editor settings written:")
-          print(content)
-          PYEOF
+          {
+            echo '[gd_resource type="EditorSettings" format=3]'
+            echo ''
+            echo '[resource]'
+            echo "export/android/java_sdk_path = \"$JAVA_HOME\""
+            echo "export/android/android_sdk_path = \"$ANDROID_HOME\""
+            echo "export/android/debug_keystore = \"$GITHUB_WORKSPACE/android/debug.keystore\""
+            echo 'export/android/debug_keystore_user = "androiddebugkey"'
+            echo 'export/android/debug_keystore_pass = "android"'
+          } > ~/.config/godot/editor_settings-4.tres
+          echo "=== editor_settings-4.tres ==="
+          cat ~/.config/godot/editor_settings-4.tres
 
       - name: Generate debug keystore
         run: |
@@ -91,6 +81,7 @@ export/android/debug_keystore_pass = "android"
             -keysize 2048 \
             -validity 10000 \
             -dname "CN=Android Debug,O=Android,C=US"
+          echo "✅ Keystore: $(ls -la android/debug.keystore)"
 
       - name: Install Android build template into project
         run: |
@@ -100,13 +91,13 @@ export/android/debug_keystore_pass = "android"
           TEMPLATES=$HOME/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable
           if [ -f "$TEMPLATES/android_source.zip" ]; then
             unzip -q "$TEMPLATES/android_source.zip" -d android/build/
-            echo "✅ Android build template extracted"
+            echo "✅ Template extracted"
             echo "=== .build_version ==="
             cat android/build/.build_version 2>/dev/null || echo "(not found)"
-            echo "=== android/build/ top-level ==="
-            ls android/build/ | head -20
+            echo "=== android/build/ top level ==="
+            ls android/build/ | head -15
           else
-            echo "❌ android_source.zip not found in templates"
+            echo "❌ android_source.zip not found"
             ls "$TEMPLATES/"
             exit 1
           fi
@@ -118,81 +109,59 @@ export/android/debug_keystore_pass = "android"
           AAR=$(find android/build -name "godot-lib*.aar" | head -1)
           if [ -n "$AAR" ]; then
             cp "$AAR" "$LIBS_DIR/godot-lib.aar"
-            echo "✅ Copied $(basename $AAR) → $LIBS_DIR/godot-lib.aar"
+            echo "✅ Copied $(basename $AAR)"
           else
-            echo "Searching for any .aar in build template:"
-            find android/build -name "*.aar" || echo "none"
-            echo "❌ godot-lib.aar not found inside android_source.zip"
+            find android/build -name "*.aar" || echo "no aar found"
+            echo "❌ godot-lib.aar not found"
             exit 1
           fi
 
       - name: Build plugin AAR
         run: |
           PLUGIN_DIR="$GITHUB_WORKSPACE/android/plugins/MiraPlugin"
-
-          GRADLE_BIN=$(find "${RUNNER_TEMP:-/home/runner/work/_temp}" \
+          GRADLE_BIN=$(find "${RUNNER_TEMP:-/home/runner/work/_temp}" "$HOME" \
             -name "gradle" -executable -path "*/gradle-8.4/bin/gradle" 2>/dev/null | head -1)
-          if [ -z "$GRADLE_BIN" ]; then
-            GRADLE_BIN=$(find "$HOME" \
-              -name "gradle" -executable -path "*/gradle-8.4/bin/gradle" 2>/dev/null | head -1)
-          fi
-          if [ -z "$GRADLE_BIN" ]; then
-            GRADLE_BIN="gradle"
-          fi
-          echo "Using Gradle: $GRADLE_BIN"
+          GRADLE_BIN="${GRADLE_BIN:-gradle}"
+          echo "Using: $GRADLE_BIN"
 
-          "$GRADLE_BIN" \
-            --project-dir "$PLUGIN_DIR" \
-            assembleRelease \
-            --no-daemon \
-            --stacktrace \
-            2>&1 | tee /tmp/gradle-build.log
+          "$GRADLE_BIN" --project-dir "$PLUGIN_DIR" assembleRelease --no-daemon 2>&1 | tee /tmp/plugin-build.log
           EXIT=${PIPESTATUS[0]}
           if [ $EXIT -ne 0 ]; then
-            echo "=== BUILD FAILED ==="
-            tail -60 /tmp/gradle-build.log
+            tail -40 /tmp/plugin-build.log
             exit $EXIT
           fi
 
-          # FIX: AGP 8.x outputs to build/outputs/aar/ with filename suffix -release.aar
-          # NOT inside a "release" subdirectory (old pattern "*/release/*" was wrong)
           AAR=$(find "$PLUGIN_DIR/build/outputs/aar" -name "*.aar" 2>/dev/null | head -1)
-          if [ -z "$AAR" ]; then
-            AAR=$(find "$PLUGIN_DIR" -name "*.aar" ! -path "*/libs/*" 2>/dev/null | head -1)
-          fi
+          [ -z "$AAR" ] && AAR=$(find "$PLUGIN_DIR" -name "*.aar" ! -path "*/libs/*" 2>/dev/null | head -1)
           if [ -n "$AAR" ]; then
             cp "$AAR" "$PLUGIN_DIR/MiraPlugin.aar"
-            echo "✅ Plugin AAR: $AAR → MiraPlugin.aar"
+            echo "✅ Plugin AAR → MiraPlugin.aar"
           else
-            echo "❌ No AAR produced by Gradle"
+            echo "❌ No AAR found"
             exit 1
           fi
-
-          # FIX: .gdignore only in PLUGIN build output — NOT in android/build/ (Godot template)
-          # Putting .gdignore in android/build/ would hide the build template from Godot!
           touch "$PLUGIN_DIR/build/.gdignore"
-          echo "✅ .gdignore added to plugin build output (prevents Godot scanning intermediates)"
-          echo "ℹ️  android/build/ remains visible so Godot can find the build template"
+          echo "✅ .gdignore → plugin build output only (android/build/ stays visible)"
 
       - name: Build APK
         run: |
           mkdir -p build
-          echo "=== Godot config check ==="
-          cat ~/.config/godot/editor_settings-4.tres
-          echo "=== android/build template ==="
-          ls android/build/ | head -10
-          cat android/build/.build_version 2>/dev/null || echo "(no .build_version)"
-          echo "=== Running Godot export ==="
+          echo "=== Pre-export checks ==="
+          echo "Keystore exists: $(ls android/debug.keystore 2>/dev/null && echo YES || echo NO)"
+          cat android/build/.build_version 2>/dev/null && echo "" || echo "(no .build_version)"
+          echo "Plugin AAR: $(ls android/plugins/MiraPlugin/MiraPlugin.aar 2>/dev/null && echo YES || echo NO)"
+          echo "=== Starting Godot export ==="
           godot --headless --path . --verbose --export-debug "Android" build/${{ env.EXPORT_NAME }}.apk 2>&1 \
-            | grep -v "^EditorFileSystem\|^reimport\|import took\|step [0-9]" \
+            | grep -v "reimport\|import took\|^EditorFileSystem: Importing\|step [0-9]" \
             | tee /tmp/godot-export.log
-          EXIT=${PIPESTATUS[0]}
-          if [ ! -f "build/${{ env.EXPORT_NAME }}.apk" ] || [ $EXIT -ne 0 ]; then
-            echo "=== EXPORT FAILED — searching for specific errors ==="
-            grep -i "error\|fail\|invalid\|missing\|configuration" /tmp/godot-export.log | head -30
+          if [ -f "build/${{ env.EXPORT_NAME }}.apk" ]; then
+            echo "✅ APK: $(du -sh build/${{ env.EXPORT_NAME }}.apk)"
+          else
+            echo "❌ APK not produced"
+            echo "=== Errors from export log ==="
+            grep -i "error\|fail\|invalid\|missing\|cannot" /tmp/godot-export.log | head -30
             exit 1
           fi
-          echo "✅ APK size: $(du -sh build/${{ env.EXPORT_NAME }}.apk)"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
