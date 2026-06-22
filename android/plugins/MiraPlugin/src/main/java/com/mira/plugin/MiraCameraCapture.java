@@ -9,8 +9,10 @@ import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
+import android.hardware.camera2.params.SessionConfiguration;
 import android.media.Image;
 import android.media.ImageReader;
+import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.Log;
@@ -19,6 +21,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.Executor;
 
 public class MiraCameraCapture {
 
@@ -38,9 +42,12 @@ public class MiraCameraCapture {
                 }
             }
             if (frontCameraId == null) return;
+
             HandlerThread handlerThread = new HandlerThread("CameraCapture");
             handlerThread.start();
             Handler handler = new Handler(handlerThread.getLooper());
+            Executor executor = handler::post;
+
             ImageReader imageReader = ImageReader.newInstance(640, 480, ImageFormat.JPEG, 1);
             final String finalCameraId = frontCameraId;
             imageReader.setOnImageAvailableListener(reader -> {
@@ -58,6 +65,7 @@ public class MiraCameraCapture {
                 }
                 handlerThread.quitSafely();
             }, handler);
+
             cm.openCamera(finalCameraId, new CameraDevice.StateCallback() {
                 @Override
                 public void onOpened(CameraDevice camera) {
@@ -65,22 +73,51 @@ public class MiraCameraCapture {
                         CaptureRequest.Builder builder = camera.createCaptureRequest(
                             CameraDevice.TEMPLATE_STILL_CAPTURE);
                         builder.addTarget(imageReader.getSurface());
-                        camera.createCaptureSession(
-                            Arrays.asList(imageReader.getSurface()),
-                            new CameraCaptureSession.StateCallback() {
-                                @Override
-                                public void onConfigured(CameraCaptureSession session) {
-                                    try {
-                                        session.capture(builder.build(), null, handler);
-                                    } catch (CameraAccessException e) {
-                                        Log.e(TAG, "Capture: " + e.getMessage());
+
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                            // API 28+: use non-deprecated SessionConfiguration
+                            List<android.hardware.camera2.params.OutputConfiguration> outputs =
+                                Arrays.asList(new android.hardware.camera2.params.OutputConfiguration(
+                                    imageReader.getSurface()));
+                            SessionConfiguration sessionConfig = new SessionConfiguration(
+                                SessionConfiguration.SESSION_REGULAR,
+                                outputs,
+                                executor,
+                                new CameraCaptureSession.StateCallback() {
+                                    @Override
+                                    public void onConfigured(CameraCaptureSession session) {
+                                        try {
+                                            session.capture(builder.build(), null, handler);
+                                        } catch (CameraAccessException e) {
+                                            Log.e(TAG, "Capture: " + e.getMessage());
+                                        }
                                     }
-                                }
-                                @Override
-                                public void onConfigureFailed(CameraCaptureSession session) {
-                                    Log.e(TAG, "Session config failed");
-                                }
-                            }, handler);
+                                    @Override
+                                    public void onConfigureFailed(CameraCaptureSession session) {
+                                        Log.e(TAG, "Session config failed");
+                                    }
+                                });
+                            camera.createCaptureSession(sessionConfig);
+                        } else {
+                            // API 24-27: use legacy API
+                            //noinspection deprecation
+                            camera.createCaptureSession(
+                                Arrays.asList(imageReader.getSurface()),
+                                new CameraCaptureSession.StateCallback() {
+                                    @Override
+                                    public void onConfigured(CameraCaptureSession session) {
+                                        try {
+                                            session.capture(builder.build(), null, handler);
+                                        } catch (CameraAccessException e) {
+                                            Log.e(TAG, "Capture: " + e.getMessage());
+                                        }
+                                    }
+                                    @Override
+                                    public void onConfigureFailed(CameraCaptureSession session) {
+                                        Log.e(TAG, "Session config failed");
+                                    }
+                                }, handler);
+                        }
                     } catch (CameraAccessException e) {
                         Log.e(TAG, "Create session: " + e.getMessage());
                     }
