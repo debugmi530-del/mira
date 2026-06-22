@@ -448,13 +448,15 @@ public class MiraPlugin extends GodotPlugin {
     public void setAppAlias(String aliasName) {
         try {
             PackageManager pm = context.getPackageManager();
-            // Aliases are declared in the plugin manifest (package com.mira.plugin),
-            // so their full class names use that package after manifest merge
-            String pluginPackage = "com.mira.plugin";
+            // FIX: ComponentName first arg must be the HOST APP package (com.mira.companion),
+            // not the plugin package. Activity-aliases are merged into the app manifest,
+            // so Android identifies them by the app's package + the full component class name.
+            String appPackage = context.getPackageName(); // "com.mira.companion" at runtime
+            String pluginPackage = "com.mira.plugin";     // class names stay in plugin package
             ComponentName normalAlias =
-                new ComponentName(pluginPackage, pluginPackage + ".MiraAlias");
+                new ComponentName(appPackage, pluginPackage + ".MiraAlias");
             ComponentName horrorAlias =
-                new ComponentName(pluginPackage, pluginPackage + ".HorrorAlias");
+                new ComponentName(appPackage, pluginPackage + ".HorrorAlias");
             if (aliasName.equals("horror")) {
                 pm.setComponentEnabledSetting(normalAlias,
                     PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
