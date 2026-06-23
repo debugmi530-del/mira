@@ -34,10 +34,23 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android build tools & NDK
+      - name: Install Android build tools
         run: |
-          sdkmanager "build-tools;34.0.0" "platform-tools" "platforms;android-34" "ndk;23.2.8568313" "cmake;3.22.1"
-          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/23.2.8568313" >> $GITHUB_ENV
+          sdkmanager "build-tools;34.0.0" "platform-tools" "platforms;android-34"
+
+      - name: Generate debug keystore
+        run: |
+          mkdir -p android
+          keytool -genkey -v \
+            -keystore android/debug.keystore \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+          echo "Keystore: $(ls -lh android/debug.keystore)"
 
       - name: Configure Godot Android SDK paths
         run: |
@@ -52,21 +65,7 @@ jobs:
             echo 'export/android/debug_keystore_user = "androiddebugkey"'
             echo 'export/android/debug_keystore_pass = "android"'
           } > ~/.config/godot/editor_settings-4.tres
-          cat ~/.config/godot/editor_settings-4.tres
-
-      - name: Generate debug keystore
-        run: |
-          mkdir -p android
-          keytool -genkey -v \
-            -keystore android/debug.keystore \
-            -storepass android \
-            -alias androiddebugkey \
-            -keypass android \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -dname "CN=Android Debug,O=Android,C=US"
-          echo "✅ Keystore: $(ls -la android/debug.keystore)"
+          echo "=== EditorSettings ===" && cat ~/.config/godot/editor_settings-4.tres
 
       - name: Download Godot ${{ env.GODOT_VERSION }}
         run: |
@@ -75,78 +74,68 @@ jobs:
           sudo mv "/tmp/godot/Godot_v${{ env.GODOT_VERSION }}-stable_linux.x86_64" /usr/local/bin/godot
           sudo chmod +x /usr/local/bin/godot
 
-      - name: Download Godot Export Templates
+      - name: Download and install Godot export templates
         run: |
-          mkdir -p $HOME/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable
+          TDIR=$HOME/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable
+          mkdir -p "$TDIR"
           wget -q "https://github.com/godotengine/godot/releases/download/${{ env.GODOT_VERSION }}-stable/Godot_v${{ env.GODOT_VERSION }}-stable_export_templates.tpz" -O /tmp/templates.tpz
           unzip -q /tmp/templates.tpz -d /tmp/templates
-          mv /tmp/templates/templates/* $HOME/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable/
-          echo "Templates: $(ls $HOME/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable/ | wc -l) files"
+          mv /tmp/templates/templates/* "$TDIR/"
+          echo "Templates ($(ls $TDIR | wc -l) files):"
+          ls "$TDIR"
 
-      - name: Install Android build template into project
+      - name: Copy godot-lib.aar for plugin build
         run: |
-          mkdir -p android/build
           TEMPLATES=$HOME/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable
-          unzip -q "$TEMPLATES/android_source.zip" -d android/build/
-          echo "✅ Template extracted"
-
-          # Write .build_version — Godot editor does this on install; android_source.zip does NOT include it
-          GODOT_VER=$(godot --headless --version 2>&1 | head -1 | sed 's/Godot Engine v//; s/ -.*//')
-          printf '%s' "$GODOT_VER" > android/build/.build_version
-          echo "✅ .build_version = $(cat android/build/.build_version)"
-
-      - name: Copy godot-lib.aar from build template into plugin libs
-        run: |
           LIBS_DIR=android/plugins/MiraPlugin/libs
           mkdir -p "$LIBS_DIR"
-          AAR=$(find android/build -name "godot-lib*.aar" | head -1)
+          # Extract android_source.zip to get godot-lib.aar
+          mkdir -p /tmp/android_src
+          unzip -q "$TEMPLATES/android_source.zip" -d /tmp/android_src
+          AAR=$(find /tmp/android_src -name "godot-lib*.aar" | head -1)
           if [ -n "$AAR" ]; then
             cp "$AAR" "$LIBS_DIR/godot-lib.aar"
-            echo "✅ Copied $(basename $AAR)"
+            echo "Copied: $(basename $AAR)"
           else
-            find android/build -name "*.aar" | head -5 || echo "no .aar found"
-            echo "❌ godot-lib.aar not found"; exit 1
+            echo "❌ godot-lib.aar not found in android_source.zip"; exit 1
           fi
 
-      - name: Build plugin AAR
+      - name: Build MiraPlugin AAR
         run: |
           PLUGIN_DIR="$GITHUB_WORKSPACE/android/plugins/MiraPlugin"
-          GRADLE_BIN=$(find "${RUNNER_TEMP:-/home/runner/work/_temp}" "$HOME" \
-            -name "gradle" -executable -path "*/gradle-8.4/bin/gradle" 2>/dev/null | head -1)
+          GRADLE_BIN=$(find "$HOME/.gradle" -name "gradle" -executable -path "*/gradle-8.4/bin/gradle" 2>/dev/null | head -1)
           GRADLE_BIN="${GRADLE_BIN:-gradle}"
           echo "Gradle: $GRADLE_BIN"
-
-          "$GRADLE_BIN" --project-dir "$PLUGIN_DIR" assembleRelease --no-daemon 2>&1 | tee /tmp/plugin-build.log
+          "$GRADLE_BIN" --project-dir "$PLUGIN_DIR" assembleRelease --no-daemon 2>&1 | tee /tmp/plugin.log
           EXIT=${PIPESTATUS[0]}
-          [ $EXIT -ne 0 ] && { tail -40 /tmp/plugin-build.log; exit $EXIT; }
-
+          [ $EXIT -ne 0 ] && { tail -30 /tmp/plugin.log; exit $EXIT; }
           AAR=$(find "$PLUGIN_DIR/build/outputs/aar" -name "*.aar" 2>/dev/null | head -1)
           [ -z "$AAR" ] && AAR=$(find "$PLUGIN_DIR" -name "*.aar" ! -path "*/libs/*" 2>/dev/null | head -1)
-          [ -z "$AAR" ] && { echo "❌ No AAR found"; exit 1; }
+          [ -z "$AAR" ] && { echo "❌ No AAR produced"; exit 1; }
           cp "$AAR" "$PLUGIN_DIR/MiraPlugin.aar"
-          echo "✅ Plugin AAR → MiraPlugin.aar"
-          touch "$PLUGIN_DIR/build/.gdignore"
+          echo "✅ Plugin AAR ready: $(du -sh $PLUGIN_DIR/MiraPlugin.aar)"
 
-      - name: Build APK
+      - name: Export APK
         run: |
           mkdir -p build
-          echo "=== Pre-export checks ==="
-          echo "Keystore : $(ls android/debug.keystore 2>/dev/null && echo OK || echo MISSING)"
-          echo "build_ver: $(cat android/build/.build_version 2>/dev/null || echo MISSING)"
-          echo "Plugin   : $(ls android/plugins/MiraPlugin/MiraPlugin.aar 2>/dev/null && echo OK || echo MISSING)"
-          echo "=== Full Godot export output ==="
-          godot --headless --path . --verbose --export-debug "Android" build/${{ env.EXPORT_NAME }}.apk 2>&1 \
-            | grep -v "Class '.*' is not exposed" \
-            | tee /tmp/godot-export.log
+          echo "=== Pre-export state ==="
+          echo "android_debug.apk : $(ls $HOME/.local/share/godot/export_templates/$GODOT_VERSION.stable/android_debug.apk 2>/dev/null | wc -l) file(s)"
+          echo "debug.keystore    : $(ls android/debug.keystore 2>/dev/null)"
+          echo "MiraPlugin.aar    : $(ls android/plugins/MiraPlugin/MiraPlugin.aar 2>/dev/null)"
+          echo "export_presets.cfg: $(head -5 export_presets.cfg)"
+          echo ""
+          godot --headless --path . --export-debug "Android" build/${{ env.EXPORT_NAME }}.apk 2>&1 | grep -v "^$" | grep -v "Class '.*' is not exposed"
+          echo ""
           if [ -f "build/${{ env.EXPORT_NAME }}.apk" ]; then
-            echo "✅ APK: $(du -sh build/${{ env.EXPORT_NAME }}.apk)"
+            echo "✅ SUCCESS: $(du -sh build/${{ env.EXPORT_NAME }}.apk)"
           else
             echo "❌ APK not produced"
-            grep -i "error\|fail\|invalid\|missing\|cannot\|required\|mismatch" /tmp/godot-export.log | head -30
+            echo "=== EditorSettings after Godot run ==="
+            cat ~/.config/godot/editor_settings-4.tres | grep -A5 "android"
             exit 1
           fi
 
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.EXPORT_NAME }}-debug-apk
@@ -154,18 +143,12 @@ jobs:
           retention-days: 30
 
       - name: Create GitHub Release
-        if: github.ref == 'refs/heads/main' && hashFiles(format('build/{0}.apk', env.EXPORT_NAME)) != ''
+        if: hashFiles(format('build/{0}.apk', env.EXPORT_NAME)) != ''
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "build-${{ github.run_number }}"
           name: "Мира v${{ github.run_number }}"
-          body: |
-            Автосборка #${{ github.run_number }}
-
-            Скачайте APK и установите на Android.
-            Разрешите установку из неизвестных источников.
+          body: "Автосборка #${{ github.run_number }}. Разрешите установку из неизвестных источников."
           files: build/${{ env.EXPORT_NAME }}.apk
-          draft: false
-          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
