@@ -45,33 +45,32 @@ jobs:
             -storepass android -alias androiddebugkey -keypass android \
             -keyalg RSA -keysize 2048 -validity 10000 \
             -dname "CN=Android Debug,O=Android,C=US"
-          echo "✅ Keystore: $(ls -lh $GITHUB_WORKSPACE/android/debug.keystore)"
+          echo "Keystore: $(ls -lh $GITHUB_WORKSPACE/android/debug.keystore)"
 
       - name: Configure Godot editor settings
         run: |
           mkdir -p ~/.config/godot
-          cat > ~/.config/godot/editor_settings-4.tres << SETTINGS
-[gd_resource type="EditorSettings" format=3]
-
-[resource]
-export/android/java_sdk_path = "$JAVA_HOME"
-export/android/android_sdk_path = "$ANDROID_HOME"
-export/android/debug_keystore = "$GITHUB_WORKSPACE/android/debug.keystore"
-export/android/debug_keystore_user = "androiddebugkey"
-export/android/debug_keystore_pass = "android"
-SETTINGS
-          echo "=== EditorSettings ===" && cat ~/.config/godot/editor_settings-4.tres
+          {
+            printf '[gd_resource type="EditorSettings" format=3]\n'
+            printf '\n'
+            printf '[resource]\n'
+            printf 'export/android/java_sdk_path = "%s"\n' "$JAVA_HOME"
+            printf 'export/android/android_sdk_path = "%s"\n' "$ANDROID_HOME"
+            printf 'export/android/debug_keystore = "%s"\n' "$GITHUB_WORKSPACE/android/debug.keystore"
+            printf 'export/android/debug_keystore_user = "androiddebugkey"\n'
+            printf 'export/android/debug_keystore_pass = "android"\n'
+          } > ~/.config/godot/editor_settings-4.tres
+          cat ~/.config/godot/editor_settings-4.tres
 
       - name: Patch export_presets.cfg with absolute keystore paths
         run: |
           KS="$GITHUB_WORKSPACE/android/debug.keystore"
-          # Replace res:// keystore paths with absolute paths so Godot resolves them correctly
           sed -i \
             -e "s|keystore/debug=\"res://android/debug.keystore\"|keystore/debug=\"$KS\"|g" \
             -e "s|keystore/release=\"res://android/debug.keystore\"|keystore/release=\"$KS\"|g" \
             export_presets.cfg
-          echo "Keystore lines after patch:"
-          grep keystore export_presets.cfg
+          echo "Patched keystore lines:"
+          grep "keystore" export_presets.cfg
 
       - name: Download Godot ${{ env.GODOT_VERSION }}
         run: |
@@ -87,18 +86,19 @@ SETTINGS
           wget -q "https://github.com/godotengine/godot/releases/download/${{ env.GODOT_VERSION }}-stable/Godot_v${{ env.GODOT_VERSION }}-stable_export_templates.tpz" -O /tmp/templates.tpz
           unzip -q /tmp/templates.tpz -d /tmp/templates
           mv /tmp/templates/templates/* "$TDIR/"
-          echo "Templates: android_debug.apk=$(ls $TDIR/android_debug.apk 2>/dev/null && echo OK || echo MISSING)"
-          echo "           android_release.apk=$(ls $TDIR/android_release.apk 2>/dev/null && echo OK || echo MISSING)"
+          echo "android_debug.apk  : $(ls $TDIR/android_debug.apk 2>/dev/null && echo OK || echo MISSING)"
+          echo "android_release.apk: $(ls $TDIR/android_release.apk 2>/dev/null && echo OK || echo MISSING)"
 
       - name: Extract godot-lib.aar for plugin build
         run: |
           TDIR=$HOME/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable
           mkdir -p android/plugins/MiraPlugin/libs
+          mkdir -p /tmp/android_src
           unzip -q "$TDIR/android_source.zip" -d /tmp/android_src
           AAR=$(find /tmp/android_src -name "godot-lib*.aar" | head -1)
-          [ -z "$AAR" ] && { echo "❌ godot-lib.aar not found"; exit 1; }
+          [ -z "$AAR" ] && { echo "godot-lib.aar not found"; exit 1; }
           cp "$AAR" android/plugins/MiraPlugin/libs/godot-lib.aar
-          echo "✅ $(basename $AAR) → MiraPlugin/libs/"
+          echo "Copied: $(basename $AAR)"
 
       - name: Build MiraPlugin AAR
         run: |
@@ -110,29 +110,28 @@ SETTINGS
           [ $EXIT -ne 0 ] && { tail -30 /tmp/plugin.log; exit $EXIT; }
           AAR=$(find "$PLUGIN_DIR/build/outputs/aar" -name "*.aar" 2>/dev/null | head -1)
           [ -z "$AAR" ] && AAR=$(find "$PLUGIN_DIR" -name "*.aar" ! -path "*/libs/*" 2>/dev/null | head -1)
-          [ -z "$AAR" ] && { echo "❌ No AAR produced"; exit 1; }
+          [ -z "$AAR" ] && { echo "No AAR produced"; exit 1; }
           cp "$AAR" "$PLUGIN_DIR/MiraPlugin.aar"
           touch "$PLUGIN_DIR/build/.gdignore"
-          echo "✅ Plugin: $(du -sh $PLUGIN_DIR/MiraPlugin.aar)"
+          echo "Plugin AAR: $(du -sh $PLUGIN_DIR/MiraPlugin.aar)"
 
       - name: Export APK
         run: |
           mkdir -p build
-          echo "=== Pre-export validation ==="
-          echo "android_debug.apk: $(ls $HOME/.local/share/godot/export_templates/$GODOT_VERSION.stable/android_debug.apk && echo OK)"
-          echo "debug.keystore   : $(ls $GITHUB_WORKSPACE/android/debug.keystore && echo OK)"
-          echo "MiraPlugin.aar   : $(ls android/plugins/MiraPlugin/MiraPlugin.aar && echo OK)"
+          echo "=== Pre-export ==="
+          echo "android_debug.apk: OK=$(ls $HOME/.local/share/godot/export_templates/$GODOT_VERSION.stable/android_debug.apk 2>/dev/null && echo yes || echo no)"
+          echo "debug.keystore   : $(ls $GITHUB_WORKSPACE/android/debug.keystore 2>/dev/null && echo OK || echo MISSING)"
+          echo "MiraPlugin.aar   : $(ls android/plugins/MiraPlugin/MiraPlugin.aar 2>/dev/null && echo OK || echo MISSING)"
           grep "keystore" export_presets.cfg | head -6
           echo ""
-          godot --headless --path "$GITHUB_WORKSPACE" --export-debug "Android" "$GITHUB_WORKSPACE/build/${{ env.EXPORT_NAME }}.apk" 2>&1 \
-            | grep -v "Class '.*' is not exposed" | grep -v "^$"
+          godot --headless --path "$GITHUB_WORKSPACE" \
+            --export-debug "Android" "$GITHUB_WORKSPACE/build/${{ env.EXPORT_NAME }}.apk" 2>&1 \
+            | grep -v "Class '.*' is not exposed"
           echo ""
           if [ -f "build/${{ env.EXPORT_NAME }}.apk" ]; then
-            echo "✅ SUCCESS: $(du -sh build/${{ env.EXPORT_NAME }}.apk)"
+            echo "SUCCESS: $(du -sh build/${{ env.EXPORT_NAME }}.apk)"
           else
-            echo "❌ APK not produced"
-            echo "--- EditorSettings that Godot used ---"
-            grep "android" ~/.config/godot/editor_settings-4.tres
+            echo "FAILED: APK not produced"
             exit 1
           fi
 
