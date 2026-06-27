@@ -17,9 +17,31 @@ var _typing: bool = false
 var _current_text: String = ""
 var _back_press_count: int = 0
 
+# Мониторинг звонков
+var _prev_call_state: int = 0
+var _call_interrupted: bool = false
+var _call_poll_timer: Timer
+
 const TYPE_SPEED = 0.045
 const LINE_GAP = 0.7
 const GLITCH_CHANCE = 0.3
+
+# Реакции на звонок во время хоррора
+const HORROR_CALL_RINGING = [
+	["", "Стоп.", "", "Тебе звонят."],
+	["", "Входящий звонок.", "", "Не отвечай."],
+	["", "Кто-то хочет тебя отвлечь."],
+]
+
+const HORROR_CALL_ANSWERED = [
+	["", "Ты ответил.", "", "Ты выбрал их.", "", "Ты ошибся."],
+	["", "Они не помогут.", "", "Вернись."],
+]
+
+const HORROR_CALL_ENDED_NO_ANSWER = [
+	["", "Правильно.", "", "Продолжим."],
+	["", "Ты не ответил.", "", "Хорошо."],
+]
 
 func _ready() -> void:
 	horror_mgr = HorrorManager.new()
@@ -34,6 +56,7 @@ func _ready() -> void:
 		send_btn.connect("pressed", func(): _on_input(input_field.text))
 	get_tree().root.connect("size_changed", _on_resize)
 
+	_start_call_monitor()
 	_start_horror_sequence()
 
 func _input(event: InputEvent) -> void:
@@ -43,6 +66,44 @@ func _input(event: InputEvent) -> void:
 			_back_press_count += 1
 	if event is InputEventScreenTouch and event.pressed:
 		horror_mgr.register_touch()
+
+# ── Мониторинг звонков ────────────────────────────────────────────────────
+
+func _start_call_monitor() -> void:
+	if OS.get_name() != "Android":
+		return
+	_call_poll_timer = Timer.new()
+	_call_poll_timer.wait_time = 1.5
+	_call_poll_timer.autostart = true
+	_call_poll_timer.connect("timeout", _poll_call_state)
+	add_child(_call_poll_timer)
+
+func _poll_call_state() -> void:
+	var state = DeviceData.get_call_state()
+	if state == _prev_call_state:
+		return
+
+	match state:
+		1: # RINGING
+			_call_interrupted = false
+			_inject_call_interrupt(HORROR_CALL_RINGING)
+			_do_glitch(0.8)
+			Input.vibrate_handheld(600)
+		2: # OFFHOOK
+			if not _call_interrupted:
+				_inject_call_interrupt(HORROR_CALL_ANSWERED)
+				_call_interrupted = true
+		0: # IDLE
+			if _prev_call_state == 1:
+				_inject_call_interrupt(HORROR_CALL_ENDED_NO_ANSWER)
+
+	_prev_call_state = state
+
+func _inject_call_interrupt(reactions_pool: Array) -> void:
+	var lines = reactions_pool[randi() % reactions_pool.size()]
+	_queue_text(lines, TYPE_SPEED)
+
+# ── Хоррор-последовательность ────────────────────────────────────────────
 
 func _start_horror_sequence() -> void:
 	await get_tree().create_timer(1.5).timeout
@@ -68,7 +129,6 @@ func _wait_for_typing() -> void:
 		await get_tree().create_timer(0.25).timeout
 
 func _show_memory_context() -> void:
-	var last = MemorySystem.get_last_session()
 	var escapes = MemorySystem.get_value("escape_attempts", 0)
 	var days = GameState.get_days_since_first_launch()
 	var lines = []
@@ -109,7 +169,6 @@ func _run_wall_sequence() -> void:
 			_do_glitch(0.5 + randf() * 0.4)
 			await get_tree().create_timer(0.8).timeout
 
-		# Показываем поле ввода только после второй и четвёртой стены
 		if wall == WallBreaker.Wall.WALL_5 or wall == WallBreaker.Wall.WALL_7_CONTACTS:
 			_show_interactive_prompt()
 			await get_tree().create_timer(7.0).timeout
@@ -140,6 +199,8 @@ func _on_input(text: String) -> void:
 		input_row.visible = false
 	horror_mgr.register_text_input(text)
 
+# ── Очередь текста ────────────────────────────────────────────────────────
+
 func _queue_text(lines: Array, speed: float) -> void:
 	for line in lines:
 		_lines_queue.append({"text": str(line), "speed": speed})
@@ -169,11 +230,12 @@ func _type_line(text: String, speed: float) -> void:
 	if text_display:
 		text_display.text += "\n"
 
+# ── Эффекты ──────────────────────────────────────────────────────────────
+
 func _do_glitch(intensity: float) -> void:
 	if not glitch_overlay:
 		return
 	glitch_overlay.visible = true
-	var original_color = glitch_overlay.color
 	glitch_overlay.color = Color(randf(), 0.0, 0.0, intensity * 0.6)
 	Input.vibrate_handheld(int(intensity * 300))
 	await get_tree().create_timer(0.08).timeout
