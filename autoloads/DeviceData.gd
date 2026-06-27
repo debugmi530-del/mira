@@ -309,6 +309,12 @@ func get_last_delete_intent_app() -> String:
 		return _plugin.getLastDeleteIntentApp()
 	return ""
 
+# ── Блокировка экрана ────────────────────────────────────────────────────
+
+func lock_screen() -> void:
+	if _has("lockScreen"):
+		_plugin.lockScreen()
+
 # ── Вспомогательные ──────────────────────────────────────────────────────
 
 func get_hour() -> int:
