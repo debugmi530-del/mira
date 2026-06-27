@@ -433,7 +433,7 @@ func _on_message_sent(text: String) -> void:
 	text = text.strip_edges()
 	if text.is_empty():
 		return
-	MemorySystem.append_list("player_inputs", text)
+	MemorySystem.append_to_list("player_inputs", text)
 	_add_user_message(text)
 	input_field.clear()
 	message_count += 1
@@ -565,7 +565,8 @@ func _add_mira_message(text: String) -> void:
 	style.content_margin_top   = 8
 	style.content_margin_bottom = 6
 	bubble.add_theme_stylebox_override("panel", style)
-	bubble.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	bubble.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bubble.size_flags_stretch_ratio = 3.0
 
 	var vbox = VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 3)
@@ -574,7 +575,7 @@ func _add_mira_message(text: String) -> void:
 	lbl.text = text
 	lbl.add_theme_color_override("font_color", _mira_text_color())
 	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	lbl.custom_minimum_size = Vector2(60, 0)
+	lbl.add_theme_font_size_override("font_size", 14)
 
 	var time_lbl = Label.new()
 	time_lbl.text = _make_time_str()
@@ -589,6 +590,7 @@ func _add_mira_message(text: String) -> void:
 	# Спейсер — прижимает к левому краю
 	var spacer = Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	spacer.size_flags_stretch_ratio = 1.0
 
 	row.add_child(av_wrap)
 	row.add_child(bubble)
@@ -618,7 +620,8 @@ func _add_user_message(text: String) -> void:
 	style.content_margin_top   = 8
 	style.content_margin_bottom = 6
 	bubble.add_theme_stylebox_override("panel", style)
-	bubble.size_flags_horizontal = Control.SIZE_SHRINK_END
+	bubble.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bubble.size_flags_stretch_ratio = 3.0
 
 	var vbox = VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 3)
@@ -626,6 +629,7 @@ func _add_user_message(text: String) -> void:
 	var lbl = Label.new()
 	lbl.text = text
 	lbl.add_theme_color_override("font_color", USER_COLOR)
+	lbl.add_theme_font_size_override("font_size", 14)
 	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 	var time_row = HBoxContainer.new()
