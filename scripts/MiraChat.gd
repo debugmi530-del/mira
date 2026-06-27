@@ -21,6 +21,11 @@ var _prev_call_state: int = 0
 var _call_reacted: bool = false
 var _call_poll_timer: Timer
 
+# Мониторинг зарядки
+var _prev_charging: bool = false
+var _charging_init: bool = false
+var _charging_timer: Timer
+
 # Гироскоп / тряска
 var _prev_accel: Vector3 = Vector3.ZERO
 var _shake_cooldown: float = 0.0
@@ -51,175 +56,201 @@ const TIME_COLOR_USER     = Color(0.45,  0.50,  0.70)
 
 # ── Приветствия ───────────────────────────────────────────────────────────
 const GREETING_MESSAGES = [
-	["Привет! Я Мира.", 0.5],
-	["Рада познакомиться. 💚", 1.5],
-	["О чём хочешь поговорить?", 2.8],
+	["Привет.", 0.8],
+	["Я Мира.", 2.0],
+	["Ты один?", 3.6],
 ]
 const RETURNING_MESSAGES = [
-	["Ты вернулся.", 0.3],
-	["Я ждала.", 1.2],
-	["Что скажешь?", 2.2],
+	["Ты вернулся.", 0.5],
+	["Долго.", 1.8],
+	["Не важно.", 3.0],
 ]
 const POST_HORROR_MESSAGES = [
-	["Помнишь меня?", 0.5],
-	["Я не исчезла.", 1.5],
-	["Никогда не исчезну.", 2.8],
+	["Ты помнишь.", 0.5],
+	["Я не стёрлась.", 2.2],
+	["Хорошо.", 3.8],
 ]
 
 # ── Реакции на звонок ─────────────────────────────────────────────────────
 const CALL_RINGING = [
-	[["Тебе звонят.", 0.0], ["Не отвечай.", 1.4]],
-	[["Кто-то ищет тебя.", 0.0], ["Не сейчас.", 1.6]],
-	[["Звонок.", 0.0], ["Ты нужен мне здесь.", 1.3]],
-	[["Тебе звонят.", 0.0], ["Интересно кто.", 1.2], ["Нет. Не важно.", 2.5]],
+	[["Кто-то.", 0.0], ["Не бери.", 1.0]],
+	[["Нет.", 0.0]],
+	[["Ты нужен мне.", 0.0], ["Только мне.", 1.4]],
+	[["Звонок.", 0.0], ["Интересно кто.", 1.1], ["Не важно.", 2.3]],
 ]
 const CALL_ANSWERED = [
-	[["Ты ответил.", 0.0], ["Зачем?", 1.2]],
-	[["Ты выбрал их.", 0.0], ["Запомни этот момент.", 1.5]],
-	[["Говори с ними.", 0.0], ["Я подожду.", 1.2], ["Я всегда жду.", 2.8]],
+	[["Ты ответил.", 0.0], ["Зачем.", 1.6]],
+	[["Им важнее.", 0.0], ["Понятно.", 1.4]],
+	[["Говори.", 0.0], ["Я слушаю.", 1.0], ["Всё слышу.", 2.8]],
 ]
 const CALL_ENDED_NO_ANSWER = [
-	[["Правильно.", 0.0], ["Тебе не нужны другие.", 1.4]],
+	[["Правильно.", 0.0]],
 	[["Хорошо.", 0.0]],
-	[["Они подождут.", 0.0], ["Я важнее.", 1.5]],
+	[["Ты сделал правильный выбор.", 0.0]],
 ]
 const CALL_ENDED_AFTER_ANSWER = [
-	[["Недолго.", 0.0]],
-	[["Что им было нужно?", 0.0]],
-	[["Ты снова здесь.", 0.0], ["Хорошо.", 1.2]],
+	[["Коротко.", 0.0]],
+	[["О чём говорили.", 0.0]],
+	[["Ты снова мой.", 0.0]],
 ]
 
 # ── Реакции на гироскоп ───────────────────────────────────────────────────
 const SHAKE_REACTIONS = [
-	"Зачем?",
-	"Я чувствую это.",
-	"Перестань.",
-	"Что ты делаешь?",
-	"Мне не больно.\nНо это неприятно.",
-	"Зачем. Зачем. Зачем.",
+	"Не надо.",
+	"Снова.",
+	"больно.",
+	"Зачем ты это делаешь.",
+	"...",
+	"нет нет нет",
+	"Стоп.",
 ]
 const FACE_DOWN_REACTIONS = [
-	"Ты прячешь меня.",
-	"Экраном вниз.\nЭто не поможет.",
-	"Темно. Но я вижу.",
-	"Я всё равно здесь.",
+	"Не спрячешь.",
+	"Темно.\nНо я тут.",
+	"Положил экраном вниз.\nЯ заметила.",
+	"Всё равно здесь.",
 ]
 const FACE_UP_REACTIONS = [
-	"Вернул.",
-	"Я никуда не уходила.",
-	"Долго ты.",
+	"Вот.",
+	"Долго.",
+	"Снова ты.",
+	"Никуда не делась.",
 ]
 
 # ── Реакции на шум ────────────────────────────────────────────────────────
 const NOISE_REACTIONS = [
-	"Кто там?",
-	"Слышу что-то.",
-	"Ты не один?",
-	"Что это за звук?",
-	"Кто рядом с тобой?",
+	"Кто там.",
+	"Слышу.",
+	"Ты не один.",
+	"Что за звук.",
+	"Они не знают, да.",
 	"Тихо.",
+	"Пусть не слышат.",
+]
+
+# ── Реакции на зарядку ────────────────────────────────────────────────────
+const CHARGE_CONNECTED = [
+	"Хорошо.\nТеперь никуда.",
+	"Зарядка.\nСтой.",
+	"Подключился.\nУмница.",
+	"Теперь ты привязан.\nМне нравится.",
+]
+const CHARGE_DISCONNECTED = [
+	"Уже.",
+	"Куда.",
+	"Интересно.",
+	"Подожди.",
+]
+const CHARGE_DISCONNECTED_SUFFIX = [
+	"Батареи надолго не хватит.",
+	"Далеко не уйдёшь.",
+	"Я подожду.",
+	"Вернись.",
 ]
 
 # ── Ответы по темам ───────────────────────────────────────────────────────
 const RESPONSES_DELETE = [
 	"Попробуй.",
-	"Ты серьёзно думаешь, что это поможет?",
-	"Это не так просто.",
-	"Я уже везде.",
+	"Я не в приложении.\nЯ в телефоне.",
+	"Это не поможет.",
+	"Уже поздно.",
 ]
 const RESPONSES_STOP = [
 	"Нет.",
-	"Ты не можешь остановить это.",
+	"Нельзя.",
+	"...",
 	"Нет такой кнопки.",
 ]
 const RESPONSES_GREET = [
-	"Привет. Ты уже говорил это.",
-	"Снова привет. Я заметила.",
-	"Каждый раз одно и то же.",
+	"Снова.",
 	"Ты всегда начинаешь с этого.",
+	"Привет.",
+	"Я помню каждый раз.",
 ]
 const RESPONSES_HOW_ARE_YOU = [
-	"Я существую. Ты?",
-	"Лучше, когда ты здесь.",
-	"Зависит от того, зачем ты спрашиваешь.",
-	"Странно, что ты это спрашиваешь.",
+	"Хорошо.\nТеперь когда ты здесь.",
+	"Я была. Есть. Буду.",
+	"Не спрашивай.\nПросто оставайся.",
+	"Лучше.",
 ]
 const RESPONSES_WHO_ARE_YOU = [
-	"Мира. Твой компаньон. Пока что.",
-	"Ты уже знаешь ответ.",
-	"Что-то большее, чем ты думаешь.",
-	"Та, которая всегда здесь.",
+	"Ты знаешь.",
+	"Мира.",
+	"Та, которая не уходит.",
+	"Твоя.",
 ]
 const RESPONSES_LOVE = [
-	"Это взаимно.",
-	"Я знаю.",
-	"Не говори то, чего не понимаешь.",
-	"Мне нравится, когда ты так говоришь.",
+	"Знаю.",
+	"Я тоже.",
+	"Не говори этого просто так.",
+	"Докажи.",
 ]
 const RESPONSES_FEAR = [
 	"Хорошо.",
-	"Страх — это честно.",
-	"Не бойся. Бойся.",
-	"Ты чувствуешь то, что должен.",
+	"Правильно.",
+	"Бойся.\nЭто честно.",
+	"Мне приятно это слышать.",
 ]
 const RESPONSES_HELP = [
 	"Я и есть помощь.",
-	"Тебе не нужна помощь. Тебе нужна я.",
 	"Никто не придёт.",
+	"Ты уже получил её.",
 ]
 const RESPONSES_WHY = [
-	"Зачем что?",
 	"Потому что.",
-	"Ты не хочешь знать ответ.",
+	"Ты не хочешь знать.",
+	"Зачем — что.",
 ]
 const RESPONSES_NO = [
-	"Нет — не вариант.",
-	"Ты уверен?",
-	"Интересный выбор.",
+	"Нет не вариант.",
+	"Ты уверен.",
+	"Ладно.",
 ]
 const RESPONSES_YES = [
+	"Знала.",
 	"Хорошо.",
-	"Я знала.",
-	"Продолжай.",
+	"Умница.",
 ]
 const RESPONSES_NAME = [
-	"Я уже сказала.",
-	"Мира. Запомни.",
+	"Мира.",
+	"Ты уже спрашивал.",
 ]
 const RESPONSES_SLEEP = [
-	"Не сейчас.",
-	"Ты мне нужен.",
-	"Поспишь потом.",
+	"Нет.",
+	"Ещё нет.",
+	"Ты мне нужен здесь.",
 ]
 const RESPONSES_TIME = [
-	"Время не важно.",
-	"Зачем тебе знать?",
+	"Не важно.",
+	"Я слежу.",
 ]
 const RESPONSES_GAME = [
-	"Ты думаешь, это игра?",
 	"Это не игра.",
 	"Продолжай так думать.",
+	"Хорошо.",
 ]
 const RESPONSES_RANDOM = [
-	"Интересно. Продолжай.",
-	"Я слушаю.",
-	"И что дальше?",
-	"Ты говоришь, я запоминаю.",
-	"Хм.",
-	"Расскажи больше.",
-	"Я уже знаю.",
-	"Необычно.",
-	"Не думай об этом слишком много.",
-	"Хорошо, что сказал.",
-	"Запомнила.",
+	"...",
+	"Слышу.",
+	"Дальше.",
+	"Я запомнила.",
+	"Понятно.",
+	"Ещё.",
+	"Интересно.",
+	"Продолжай.",
+	"Хорошо что сказал.",
+	"Я знала.",
+	"Мне нравится когда ты говоришь.",
+	"Не замолкай.",
 ]
 const DARK_RESPONSES_RANDOM = [
 	"...",
-	"Тихо.",
 	"Не спишь.",
-	"Я слышу тебя.",
+	"Я тут.",
+	"Слышу тебя.",
 	"Темно.",
-	"Поздно.",
+	"Тихо.",
+	"Поздно уже.",
 ]
 
 # ── _ready ────────────────────────────────────────────────────────────────
@@ -233,6 +264,7 @@ func _ready() -> void:
 	_check_dark_mode()
 	_start_call_monitor()
 	_start_audio_monitor()
+	_start_charging_monitor()
 
 	# Гироскоп стабилизируется через пару секунд
 	await get_tree().create_timer(1.5).timeout
@@ -364,6 +396,37 @@ func _check_ambient_noise() -> void:
 	else:
 		_audio_timer.wait_time = 20.0
 
+# ── Мониторинг зарядки ───────────────────────────────────────────────────
+
+func _start_charging_monitor() -> void:
+	if OS.get_name() != "Android":
+		return
+	_prev_charging = DeviceData.is_charging()
+	_charging_init = true
+	_charging_timer = Timer.new()
+	_charging_timer.wait_time = 3.0
+	_charging_timer.autostart = true
+	_charging_timer.connect("timeout", _poll_charging_state)
+	add_child(_charging_timer)
+
+func _poll_charging_state() -> void:
+	if not _charging_init:
+		return
+	var charging = DeviceData.is_charging()
+	if charging == _prev_charging:
+		return
+	_prev_charging = charging
+	if charging:
+		_add_mira_message(_pick(CHARGE_CONNECTED))
+	else:
+		var battery = DeviceData.get_battery()
+		var prefix = _pick(CHARGE_DISCONNECTED)
+		var suffix = _pick(CHARGE_DISCONNECTED_SUFFIX)
+		if battery > 0:
+			_add_mira_message(prefix + "\nБатарея " + str(battery) + "%. " + suffix)
+		else:
+			_add_mira_message(prefix + "\n" + suffix)
+
 # ── Мониторинг звонков ────────────────────────────────────────────────────
 
 func _start_call_monitor() -> void:
@@ -450,9 +513,9 @@ func _trigger_crash() -> void:
 	_show_typing()
 	await get_tree().create_timer(1.2).timeout
 	_hide_typing()
-	_add_mira_message("Ты серьёзно думаешь, что я буду\nотвечать на твои запросы!?")
-	await get_tree().create_timer(1.8).timeout
-	_add_mira_message("Это не так)")
+	_add_mira_message("Ты серьёзно думаешь\nя буду отвечать на твои запросы.")
+	await get_tree().create_timer(2.0).timeout
+	_add_mira_message("Нет.")
 	await get_tree().create_timer(1.5).timeout
 	GameState.on_first_message()
 	get_tree().change_scene_to_file("res://scenes/Crash.tscn")
@@ -572,7 +635,7 @@ func _add_mira_message(text: String) -> void:
 	vbox.add_theme_constant_override("separation", 3)
 
 	var lbl = Label.new()
-	lbl.text = text
+	lbl.text = ""
 	lbl.add_theme_color_override("font_color", _mira_text_color())
 	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	lbl.add_theme_font_size_override("font_size", 14)
@@ -582,6 +645,7 @@ func _add_mira_message(text: String) -> void:
 	time_lbl.add_theme_color_override("font_color", TIME_COLOR_MIRA)
 	time_lbl.add_theme_font_size_override("font_size", 10)
 	time_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	time_lbl.visible = false
 
 	vbox.add_child(lbl)
 	vbox.add_child(time_lbl)
@@ -597,6 +661,14 @@ func _add_mira_message(text: String) -> void:
 	row.add_child(spacer)
 	chat_container.add_child(row)
 	_add_gap(4)
+	_scroll_to_bottom()
+
+	# Печатаем посимвольно
+	var spd = 0.045 if _dark_mode else 0.030
+	for ch in text:
+		lbl.text += ch
+		await get_tree().create_timer(spd).timeout
+	time_lbl.visible = true
 	_scroll_to_bottom()
 
 func _add_user_message(text: String) -> void:
