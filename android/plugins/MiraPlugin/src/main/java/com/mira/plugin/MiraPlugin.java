@@ -20,8 +20,15 @@ import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
+import android.hardware.camera2.CameraCharacteristics;
+import android.hardware.camera2.CameraManager;
+import android.net.Uri;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
 import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Environment;
@@ -820,6 +827,102 @@ public class MiraPlugin extends GodotPlugin {
             am.cancel(pi);
         } catch (Exception e) {
             Log.e(TAG, "cancelScheduledNotification: " + e.getMessage());
+        }
+    }
+
+
+    // ── Фонарик ────────────────────────────────────────────────────────────
+
+    @UsedByGodot
+    public void flashTorch(int durationMs) {
+        try {
+            CameraManager cm = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
+            if (cm == null) return;
+            for (String id : cm.getCameraIdList()) {
+                Boolean hasFlash = cm.getCameraCharacteristics(id)
+                    .get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
+                if (!Boolean.TRUE.equals(hasFlash)) continue;
+                final String camId = id;
+                cm.setTorchMode(camId, true);
+                new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                    try { cm.setTorchMode(camId, false); } catch (Exception ignored) {}
+                }, durationMs);
+                break;
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "flashTorch: " + e.getMessage());
+        }
+    }
+
+    // ── SMS ────────────────────────────────────────────────────────────────
+
+    @UsedByGodot
+    public String[] getRecentSms(int limit) {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS)
+                != PackageManager.PERMISSION_GRANTED) return new String[0];
+        List<String> results = new ArrayList<>();
+        try {
+            Cursor cursor = context.getContentResolver().query(
+                Telephony.Sms.CONTENT_URI,
+                new String[]{Telephony.Sms.ADDRESS, Telephony.Sms.BODY},
+                null, null, Telephony.Sms.DATE + " DESC");
+            if (cursor != null) {
+                int count = 0;
+                while (cursor.moveToNext() && count < limit) {
+                    String address = cursor.getString(0);
+                    String body    = cursor.getString(1);
+                    if (address == null || body == null || body.trim().isEmpty()) continue;
+                    String name = _lookupContactName(address);
+                    String sender = (name != null && !name.isEmpty()) ? name : address;
+                    if (body.length() > 80) body = body.substring(0, 80) + "...";
+                    results.add(sender + "|||" + body.trim());
+                    count++;
+                }
+                cursor.close();
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "getRecentSms: " + e.getMessage());
+        }
+        return results.toArray(new String[0]);
+    }
+
+    private String _lookupContactName(String phoneNumber) {
+        try {
+            Uri uri = Uri.withAppendedPath(
+                ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
+                Uri.encode(phoneNumber));
+            Cursor c = context.getContentResolver().query(
+                uri, new String[]{ContactsContract.PhoneLookup.DISPLAY_NAME}, null, null, null);
+            if (c != null && c.moveToFirst()) {
+                String name = c.getString(0);
+                c.close();
+                return name;
+            }
+            if (c != null) c.close();
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    // ── Вибрация по паттерну ───────────────────────────────────────────────
+
+    @UsedByGodot
+    public void vibratePattern(int[] durationsMs) {
+        try {
+            Vibrator v = (Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
+            if (v == null) return;
+            long[] timings = new long[durationsMs.length];
+            int[] amplitudes = new int[durationsMs.length];
+            for (int i = 0; i < durationsMs.length; i++) {
+                timings[i] = durationsMs[i];
+                amplitudes[i] = (i % 2 == 0) ? 0 : 255;
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                v.vibrate(VibrationEffect.createWaveform(timings, amplitudes, -1));
+            } else {
+                v.vibrate(timings, -1);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "vibratePattern: " + e.getMessage());
         }
     }
 
