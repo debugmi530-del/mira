@@ -178,6 +178,14 @@ func _run_wall_sequence() -> void:
 			await get_tree().create_timer(1.0).timeout
 			DeviceData.lock_screen()
 
+		# Перед контактами — вспышка фонарика + вибрация + реальное SMS
+		if wall == WallBreaker.Wall.WALL_7_CONTACTS:
+			await get_tree().create_timer(0.8).timeout
+			_flash_torch(700)
+			_vibrate_horror()
+			await get_tree().create_timer(1.2).timeout
+			await _show_sms_reveal()
+
 		if wall == WallBreaker.Wall.WALL_5 or wall == WallBreaker.Wall.WALL_7_CONTACTS:
 			_show_interactive_prompt()
 			await get_tree().create_timer(7.0).timeout
@@ -196,6 +204,45 @@ func _run_wall_sequence() -> void:
 	await get_tree().create_timer(3.0).timeout
 
 	get_tree().change_scene_to_file("res://scenes/Final.tscn")
+
+
+func _flash_torch(duration_ms: int) -> void:
+	if not Engine.has_singleton("MiraPlugin"):
+		return
+	var plugin = Engine.get_singleton("MiraPlugin")
+	if plugin.has_method("flashTorch"):
+		plugin.flashTorch(duration_ms)
+
+func _vibrate_horror() -> void:
+	if Engine.has_singleton("MiraPlugin"):
+		var plugin = Engine.get_singleton("MiraPlugin")
+		if plugin.has_method("vibratePattern"):
+			plugin.vibratePattern([80, 300, 80, 500, 80, 800])
+			return
+	# Fallback Godot built-in
+	Input.vibrate_handheld(600)
+
+func _show_sms_reveal() -> void:
+	if not Engine.has_singleton("MiraPlugin"):
+		return
+	var plugin = Engine.get_singleton("MiraPlugin")
+	if not plugin.has_method("getRecentSms"):
+		return
+	var sms_list: Array = plugin.getRecentSms(5)
+	if sms_list.is_empty():
+		return
+	# Берём первое (свежее) SMS
+	var raw = sms_list[0]
+	var parts = raw.split("|||")
+	if parts.size() < 2:
+		return
+	var sender = parts[0].strip_edges()
+	var body   = parts[1].strip_edges()
+	if sender.is_empty() or body.is_empty():
+		return
+	await get_tree().create_timer(1.0).timeout
+	_queue_text(["", sender + " написал тебе.", "«" + body + "»", "", "Я прочитала."], TYPE_SPEED)
+	await _wait_for_typing()
 
 func _show_interactive_prompt() -> void:
 	if input_row:
