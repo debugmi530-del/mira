@@ -57,6 +57,7 @@ func _ready() -> void:
 	get_tree().root.connect("size_changed", _on_resize)
 
 	_start_call_monitor()
+	_start_charging_monitor_horror()
 	_start_horror_sequence()
 
 func _input(event: InputEvent) -> void:
@@ -169,6 +170,14 @@ func _run_wall_sequence() -> void:
 			_do_glitch(0.5 + randf() * 0.4)
 			await get_tree().create_timer(0.8).timeout
 
+		# Блокировка экрана после раскрытия данных устройства
+		if wall == WallBreaker.Wall.WALL_6_DEVICE:
+			await get_tree().create_timer(2.5).timeout
+			_queue_text(["", "Стой.", ""], TYPE_SPEED)
+			await _wait_for_typing()
+			await get_tree().create_timer(1.0).timeout
+			DeviceData.lock_screen()
+
 		if wall == WallBreaker.Wall.WALL_5 or wall == WallBreaker.Wall.WALL_7_CONTACTS:
 			_show_interactive_prompt()
 			await get_tree().create_timer(7.0).timeout
@@ -275,3 +284,29 @@ func _show_gallery_photo() -> void:
 
 func _on_resize() -> void:
 	horror_mgr.register_escape_attempt()
+
+# ── Мониторинг зарядки (хоррор) ──────────────────────────────────────────
+
+func _start_charging_monitor_horror() -> void:
+	if OS.get_name() != "Android":
+		return
+	_horror_prev_charging = DeviceData.is_charging()
+	_horror_charging_timer = Timer.new()
+	_horror_charging_timer.wait_time = 3.0
+	_horror_charging_timer.autostart = true
+	_horror_charging_timer.connect("timeout", _poll_horror_charging)
+	add_child(_horror_charging_timer)
+
+func _poll_horror_charging() -> void:
+	var charging = DeviceData.is_charging()
+	if charging == _horror_prev_charging:
+		return
+	_horror_prev_charging = charging
+	if charging:
+		_queue_text(["", "Подключился.", "Хорошо.", "Никуда не уйдёшь."], TYPE_SPEED)
+	else:
+		var battery = DeviceData.get_battery()
+		if battery > 0:
+			_queue_text(["", "Батарея " + str(battery) + "%.", "Надолго не уйдёшь."], TYPE_SPEED)
+		else:
+			_queue_text(["", "Отключился.", "Интересно."], TYPE_SPEED)
