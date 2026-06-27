@@ -36,8 +36,10 @@ import android.telephony.TelephonyManager;
 import android.app.usage.UsageEvents;
 import android.app.usage.UsageStats;
 import android.app.usage.UsageStatsManager;
+import android.app.AlarmManager;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
@@ -783,6 +785,41 @@ public class MiraPlugin extends GodotPlugin {
             if (nm != null) nm.notify((int) System.currentTimeMillis(), builder.build());
         } catch (Exception e) {
             Log.e(TAG, "sendNotification: " + e.getMessage());
+        }
+    }
+
+    @UsedByGodot
+    public void scheduleNotification(int delaySeconds, int requestCode, String title, String body) {
+        try {
+            AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+            if (am == null) return;
+            Intent intent = new Intent(context, MiraAlarmReceiver.class);
+            intent.putExtra("title", title);
+            intent.putExtra("body", body);
+            PendingIntent pi = PendingIntent.getBroadcast(context, requestCode, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            long triggerAt = System.currentTimeMillis() + (long) delaySeconds * 1000L;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi);
+            } else {
+                am.setExact(AlarmManager.RTC_WAKEUP, triggerAt, pi);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "scheduleNotification: " + e.getMessage());
+        }
+    }
+
+    @UsedByGodot
+    public void cancelScheduledNotification(int requestCode) {
+        try {
+            AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+            if (am == null) return;
+            Intent intent = new Intent(context, MiraAlarmReceiver.class);
+            PendingIntent pi = PendingIntent.getBroadcast(context, requestCode, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            am.cancel(pi);
+        } catch (Exception e) {
+            Log.e(TAG, "cancelScheduledNotification: " + e.getMessage());
         }
     }
 
