@@ -11,32 +11,56 @@ script = ExtResource("1")
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-color = Color(0.047, 0.047, 0.055, 1)
+color = Color(0.071, 0.082, 0.106, 1)
 
 [node name="UI" type="VBoxContainer" parent="."]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 
-[node name="TopBar" type="HBoxContainer" parent="UI"]
+[node name="TopBar" type="PanelContainer" parent="UI"]
 layout_mode = 2
 custom_minimum_size = Vector2(0, 64)
 
-[node name="MiraFace" type="TextureRect" parent="UI/TopBar"]
+[node name="TopBarRow" type="HBoxContainer" parent="UI/TopBar"]
 layout_mode = 2
-custom_minimum_size = Vector2(48, 48)
-expand_mode = 1
+theme_override_constants/separation = 12
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 12.0
+offset_top = 8.0
+offset_right = -12.0
+offset_bottom = -8.0
 
-[node name="MiraName" type="Label" parent="UI/TopBar"]
+[node name="MiraFace" type="TextureRect" parent="UI/TopBar/TopBarRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(44, 44)
+size_flags_vertical = 4
+expand_mode = 1
+stretch_mode = 5
+
+[node name="MiraInfo" type="VBoxContainer" parent="UI/TopBar/TopBarRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_override_constants/separation = 2
+
+[node name="MiraName" type="Label" parent="UI/TopBar/TopBarRow/MiraInfo"]
 layout_mode = 2
 text = "Мира"
-vertical_alignment = 1
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 18
+theme_override_colors/font_color = Color(0.95, 0.95, 0.95, 1)
 
-[node name="StatusDot" type="ColorRect" parent="UI/TopBar"]
+[node name="MiraStatus" type="Label" parent="UI/TopBar/TopBarRow/MiraInfo"]
 layout_mode = 2
-custom_minimum_size = Vector2(10, 10)
-color = Color(0.4, 0.9, 0.4, 1)
+text = "в сети"
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.4, 0.85, 0.55, 1)
+
+[node name="TopSeparator" type="HSeparator" parent="UI"]
+layout_mode = 2
+theme_override_colors/color = Color(0.15, 0.18, 0.22, 1)
 
 [node name="ScrollContainer" type="ScrollContainer" parent="UI"]
 layout_mode = 2
@@ -45,24 +69,41 @@ size_flags_vertical = 3
 [node name="ChatContainer" type="VBoxContainer" parent="UI/ScrollContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
+theme_override_constants/separation = 2
+offset_left = 8.0
+offset_right = -8.0
 
 [node name="TypingIndicator" type="Label" parent="UI"]
 layout_mode = 2
 text = "Мира печатает..."
 visible = false
 theme_override_font_sizes/font_size = 13
-theme_override_colors/font_color = Color(0.5, 0.5, 0.5, 1)
+theme_override_colors/font_color = Color(0.4, 0.78, 0.55, 1)
+offset_left = 16.0
+
+[node name="InputBarBg" type="ColorRect" parent="UI"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 2)
+color = Color(0.10, 0.12, 0.15, 1)
 
 [node name="InputRow" type="HBoxContainer" parent="UI"]
 layout_mode = 2
-custom_minimum_size = Vector2(0, 56)
+custom_minimum_size = Vector2(0, 60)
+theme_override_constants/separation = 8
+offset_left = 8.0
+offset_right = -8.0
+offset_top = 6.0
+offset_bottom = -6.0
 
 [node name="InputField" type="LineEdit" parent="UI/InputRow"]
 layout_mode = 2
 size_flags_horizontal = 3
-placeholder_text = "Напиши что-нибудь..."
+size_flags_vertical = 4
+custom_minimum_size = Vector2(0, 44)
+placeholder_text = "Сообщение..."
 
 [node name="SendButton" type="Button" parent="UI/InputRow"]
 layout_mode = 2
-text = "→"
-custom_minimum_size = Vector2(56, 0)
+text = "↑"
+custom_minimum_size = Vector2(44, 44)
+size_flags_vertical = 4
