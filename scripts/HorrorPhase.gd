@@ -169,7 +169,9 @@ func _run_wall_sequence() -> void:
 
 		_queue_text(lines, TYPE_SPEED)
 		await _wait_for_typing()
+		if not is_inside_tree(): return
 		await get_tree().create_timer(1.2).timeout
+		if not is_inside_tree(): return
 
 		if randf() < GLITCH_CHANCE:
 			_do_glitch(0.5 + randf() * 0.4)
