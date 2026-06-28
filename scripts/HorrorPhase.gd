@@ -22,6 +22,10 @@ var _prev_call_state: int = 0
 var _call_interrupted: bool = false
 var _call_poll_timer: Timer
 
+# Мониторинг зарядки (хоррор)
+var _horror_prev_charging: bool = false
+var _horror_charging_timer: Timer
+
 const TYPE_SPEED = 0.045
 const LINE_GAP = 0.7
 const GLITCH_CHANCE = 0.3
@@ -217,7 +221,7 @@ func _vibrate_horror() -> void:
 	if Engine.has_singleton("MiraPlugin"):
 		var plugin = Engine.get_singleton("MiraPlugin")
 		if plugin.has_method("vibratePattern"):
-			plugin.vibratePattern([80, 300, 80, 500, 80, 800])
+			plugin.vibratePattern(PackedInt32Array([80, 300, 80, 500, 80, 800]))
 			return
 	# Fallback Godot built-in
 	Input.vibrate_handheld(600)
