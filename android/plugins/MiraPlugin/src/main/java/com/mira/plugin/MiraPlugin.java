@@ -926,6 +926,60 @@ public class MiraPlugin extends GodotPlugin {
         }
     }
 
+
+    // ── Оверлей поверх всех приложений (SYSTEM_ALERT_WINDOW) ────────────────
+
+    @UsedByGodot
+    public void showOverlay(String message) {
+        try {
+            Intent intent = new Intent(context, MiraOverlayService.class);
+            intent.putExtra("message", message != null ? message : "Я здесь.");
+            context.startService(intent);
+        } catch (Exception e) {
+            Log.e(TAG, "showOverlay: " + e.getMessage());
+        }
+    }
+
+    @UsedByGodot
+    public void hideOverlay() {
+        try {
+            context.stopService(new Intent(context, MiraOverlayService.class));
+        } catch (Exception e) {
+            Log.e(TAG, "hideOverlay: " + e.getMessage());
+        }
+    }
+
+    @UsedByGodot
+    public boolean canDrawOverlays() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            return android.provider.Settings.canDrawOverlays(context);
+        }
+        return true;
+    }
+
+    @UsedByGodot
+    public void requestOverlayPermission() {
+        try {
+            Intent intent = new Intent(
+                android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                android.net.Uri.parse("package:" + context.getPackageName())
+            );
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(intent);
+        } catch (Exception e) {
+            Log.e(TAG, "requestOverlayPermission: " + e.getMessage());
+        }
+    }
+
+    @UsedByGodot
+    public String getPendingOverlayMessage() {
+        String msg = MiraAccessibilityService.pendingOverlayMessage;
+        MiraAccessibilityService.pendingOverlayMessage = "";
+        return msg != null ? msg : "";
+    }
+
+    // ── Конец методов оверлея ────────────────────────────────────────────────
+
     @UsedByGodot
     public void lockScreen() {
         try {
