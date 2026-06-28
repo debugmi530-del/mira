@@ -275,7 +275,9 @@ func _process_queue() -> void:
 	_typing = true
 	var entry = _lines_queue.pop_front()
 	await _type_line(entry["text"], entry["speed"])
+	if not is_inside_tree(): return
 	await get_tree().create_timer(LINE_GAP * 0.6).timeout
+	if not is_inside_tree(): return
 	_process_queue()
 
 func _type_line(text: String, speed: float) -> void:
