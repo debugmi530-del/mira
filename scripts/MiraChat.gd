@@ -477,6 +477,7 @@ func _react_to_call(pool: Array) -> void:
                 var delay: float = entry[1]
                 if delay > 0.0:
                         await get_tree().create_timer(delay).timeout
+                if not is_inside_tree(): return
                 _add_mira_message(msg)
 
 # ── Приветствия ───────────────────────────────────────────────────────────
@@ -601,6 +602,8 @@ func _trigger_crash() -> void:
         get_tree().change_scene_to_file("res://scenes/Crash.tscn")
 
 func _mira_respond(text: String) -> void:
+        if mira_typing:
+                return
         _show_typing()
         var delay = 0.8 + randf() * 1.2
         if _dark_mode:
