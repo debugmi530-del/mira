@@ -865,7 +865,7 @@ public class MiraPlugin extends GodotPlugin {
             Cursor cursor = context.getContentResolver().query(
                 Telephony.Sms.CONTENT_URI,
                 new String[]{Telephony.Sms.ADDRESS, Telephony.Sms.BODY},
-                null, null, Telephony.Sms.DATE + " DESC");
+                Telephony.Sms.TYPE + " = " + Telephony.Sms.MESSAGE_TYPE_INBOX, null, Telephony.Sms.DATE + " DESC");
             if (cursor != null) {
                 int count = 0;
                 while (cursor.moveToNext() && count < limit) {
