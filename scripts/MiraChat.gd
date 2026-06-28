@@ -511,13 +511,17 @@ func _check_sms_on_open() -> void:
         if sender.is_empty() or body.is_empty():
                 return
         await get_tree().create_timer(6.0 + randf() * 3.0).timeout
+        if not is_inside_tree(): return
         _show_typing()
         await get_tree().create_timer(1.2).timeout
+        if not is_inside_tree(): return
         _hide_typing()
         _add_mira_message(sender + " написал тебе.")
         await get_tree().create_timer(1.8).timeout
+        if not is_inside_tree(): return
         _add_mira_message("«" + body + "»")
         await get_tree().create_timer(1.2).timeout
+        if not is_inside_tree(): return
         _add_mira_message("Я прочитала раньше тебя.")
 
 # ── Тихое фото + реакция ──────────────────────────────────────────────────
@@ -533,6 +537,7 @@ func _silent_photo_and_react() -> void:
                 return
         plugin.takeFrontCameraPhoto()  # без показа — только сохраняем
         await get_tree().create_timer(4.0 + randf() * 4.0).timeout
+        if not is_inside_tree(): return
         var reactions = [
                 "Ты выглядишь устало.",
                 "Ты один там.",
@@ -741,9 +746,11 @@ func _add_mira_message(text: String) -> void:
         # Печатаем посимвольно
         var spd = 0.045 if _dark_mode else 0.030
         for ch in text:
+                if not is_inside_tree(): return
                 lbl.text += ch
                 await get_tree().create_timer(spd).timeout
-        time_lbl.visible = true
+        if is_inside_tree():
+                time_lbl.visible = true
         _scroll_to_bottom()
 
 func _add_user_message(text: String) -> void:
