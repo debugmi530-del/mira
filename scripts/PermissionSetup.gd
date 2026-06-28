@@ -183,6 +183,7 @@ func _type_description(text: String) -> void:
 func _do_type(text: String) -> void:
 	desc_label.text = ""
 	for ch in text:
+		if not is_inside_tree(): return
 		desc_label.text += ch
 		await get_tree().create_timer(0.022).timeout
 	_typing = false
