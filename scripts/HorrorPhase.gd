@@ -131,6 +131,7 @@ func _start_horror_sequence() -> void:
 
 func _wait_for_typing() -> void:
 	while _typing or not _lines_queue.is_empty():
+		if not is_inside_tree(): return
 		await get_tree().create_timer(0.25).timeout
 
 func _show_memory_context() -> void:
