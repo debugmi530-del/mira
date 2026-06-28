@@ -825,12 +825,14 @@ func _add_gap(h: int) -> void:
 # ── Typing / Scroll ───────────────────────────────────────────────────────
 
 func _show_typing() -> void:
+        if not is_inside_tree(): return
         if typing_indicator:
                 typing_indicator.visible = true
                 typing_indicator.text = "Мира печатает..."
         mira_typing = true
 
 func _hide_typing() -> void:
+        if not is_inside_tree(): return
         if typing_indicator:
                 typing_indicator.visible = false
         mira_typing = false
