@@ -11,6 +11,7 @@ extends Node
 
 var current_step: int = 0
 var _typing: bool = false
+var _processing_step: bool = false
 
 # ── Шаги разрешений ──────────────────────────────────────────────────────
 # permission: "" = просто текст, "SYSTEM_*" = открыть системные настройки
@@ -194,6 +195,9 @@ func _on_allow_pressed() -> void:
 		_typing = false
 		desc_label.text = STEPS[current_step]["desc"]
 		return
+	if _processing_step:
+		return
+	_processing_step = true
 
 	var step = STEPS[current_step]
 	var perm = step.get("permission", "")
@@ -218,6 +222,7 @@ func _on_allow_pressed() -> void:
 					OS.request_permission(extra_perm)
 				await get_tree().create_timer(0.6).timeout
 
+	_processing_step = false
 	_next_step()
 
 func _on_skip_pressed() -> void:
