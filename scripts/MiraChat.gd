@@ -397,6 +397,7 @@ func _start_audio_monitor() -> void:
         add_child(_audio_timer)
         # Запускаем через 45 с — не перебиваем приветствие
         await get_tree().create_timer(45.0).timeout
+        if not is_inside_tree(): return
         _audio_timer.start()
 
 func _check_ambient_noise() -> void:
@@ -485,6 +486,7 @@ func _react_to_call(pool: Array) -> void:
 func _show_first_greeting() -> void:
         for entry in GREETING_MESSAGES:
                 await get_tree().create_timer(entry[1]).timeout
+                if not is_inside_tree(): return
                 _add_mira_message(entry[0])
 
 # ── SMS-реакция при открытии ──────────────────────────────────────────────
@@ -558,11 +560,13 @@ func _show_returning_greeting() -> void:
                 msgs[0] = ["Тебя не было " + str(days) + " дн.", 0.3]
         for entry in msgs:
                 await get_tree().create_timer(entry[1]).timeout
+                if not is_inside_tree(): return
                 _add_mira_message(entry[0])
 
 func _show_post_horror_greeting() -> void:
         for entry in POST_HORROR_MESSAGES:
                 await get_tree().create_timer(entry[1]).timeout
+                if not is_inside_tree(): return
                 _add_mira_message(entry[0])
 
 # ── Обработка сообщений ───────────────────────────────────────────────────
@@ -678,6 +682,7 @@ func _make_time_str() -> String:
         return "%02d:%02d" % [t.hour, t.minute]
 
 func _add_mira_message(text: String) -> void:
+        if not is_inside_tree(): return
         var row = HBoxContainer.new()
         row.add_theme_constant_override("separation", 8)
 
